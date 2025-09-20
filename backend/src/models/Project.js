@@ -1,30 +1,33 @@
 import database from '../config/database.js';
-import { formatDateForDB } from '../utils/helpers.js';
+import { formatDateForDB, snakeToCamel, camelToSnake } from '../utils/helpers.js';
 
 class Project {
   constructor(data = {}) {
+    // Accept both camelCase (from services) and snake_case (from database)
     this.id = data.id;
     this.name = data.name;
     this.description = data.description;
     this.status = data.status || 'planning';
     this.priority = data.priority || 'medium';
-    this.startDate = data.startDate;
-    this.endDate = data.endDate;
-    this.estimatedHours = data.estimatedHours;
-    this.actualHours = data.actualHours || 0;
-    this.createdBy = data.createdBy;
-    this.isActive = data.isActive !== undefined ? data.isActive : true;
-    this.createdAt = data.createdAt;
-    this.updatedAt = data.updatedAt;
+    this.startDate = data.startDate || data.start_date;
+    this.endDate = data.endDate || data.end_date;
+    this.budget = data.budget;
+    this.actualCost = data.actualCost || data.actual_cost;
+    this.progressPercentage = data.progressPercentage || data.progress_percentage || 0;
+    this.repositoryUrl = data.repositoryUrl || data.repository_url;
+    this.tags = data.tags;
+    this.createdBy = data.createdBy || data.created_by;
+    this.createdAt = data.createdAt || data.created_at;
+    this.updatedAt = data.updatedAt || data.updated_at;
   }
 
   // Static methods for database operations
   static async create(projectData) {
     try {
       const query = `
-        INSERT INTO projects (name, description, status, priority, startDate, endDate, 
-                             estimatedHours, actualHours, createdBy, isActive, createdAt, updatedAt)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        INSERT INTO projects (name, description, status, priority, start_date, end_date, 
+                             budget, actual_cost, progress_percentage, repository_url, tags, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
       `;
       
       const values = [
@@ -32,12 +35,14 @@ class Project {
         projectData.description || null,
         projectData.status || 'planning',
         projectData.priority || 'medium',
-        projectData.startDate ? formatDateForDB(projectData.startDate) : null,
-        projectData.endDate ? formatDateForDB(projectData.endDate) : null,
-        projectData.estimatedHours || null,
-        projectData.actualHours || 0,
-        projectData.createdBy,
-        projectData.isActive !== undefined ? projectData.isActive : true
+        projectData.startDate ? formatDateForDB(projectData.startDate) : (projectData.start_date ? formatDateForDB(projectData.start_date) : null),
+        projectData.endDate ? formatDateForDB(projectData.endDate) : (projectData.end_date ? formatDateForDB(projectData.end_date) : null),
+        projectData.budget || null,
+        projectData.actualCost || projectData.actual_cost || null,
+        projectData.progressPercentage || projectData.progress_percentage || 0,
+        projectData.repositoryUrl || projectData.repository_url || null,
+        projectData.tags ? JSON.stringify(projectData.tags) : null,
+        projectData.createdBy || projectData.created_by
       ];
 
       const [result] = await database.query(query, values);
@@ -53,11 +58,11 @@ class Project {
     try {
       const query = `
         SELECT p.*, 
-               CONCAT(u.firstName, ' ', u.lastName) as createdByName,
-               u.email as createdByEmail
+               CONCAT(u.first_name, ' ', u.last_name) as created_by_name,
+               u.email as created_by_email
         FROM projects p
-        LEFT JOIN users u ON p.createdBy = u.id
-        WHERE p.id = ? AND p.isActive = TRUE
+        LEFT JOIN users u ON p.created_by = u.id
+        WHERE p.id = ?
       `;
       
       const [rows] = await database.query(query, [id]);
@@ -76,16 +81,16 @@ class Project {
     try {
       let query = `
         SELECT p.*, 
-               CONCAT(u.firstName, ' ', u.lastName) as createdByName,
-               u.email as createdByEmail,
-               COUNT(DISTINCT pm.userId) as memberCount,
-               COUNT(DISTINCT t.id) as totalTasks,
-               COUNT(DISTINCT CASE WHEN t.status = 'done' THEN t.id END) as completedTasks
+               CONCAT(u.first_name, ' ', u.last_name) as created_by_name,
+               u.email as created_by_email,
+               COUNT(DISTINCT pm.user_id) as member_count,
+               COUNT(DISTINCT t.id) as total_tasks,
+               COUNT(DISTINCT CASE WHEN t.status = 'done' THEN t.id END) as completed_tasks
         FROM projects p
-        LEFT JOIN users u ON p.createdBy = u.id
-        LEFT JOIN project_members pm ON p.id = pm.projectId
-        LEFT JOIN tasks t ON p.id = t.projectId
-        WHERE p.isActive = TRUE
+        LEFT JOIN users u ON p.created_by = u.id
+        LEFT JOIN project_members pm ON p.id = pm.project_id
+        LEFT JOIN tasks t ON p.id = t.project_id
+        WHERE 1=1
       `;
       
       const values = [];
@@ -101,9 +106,9 @@ class Project {
         values.push(options.priority);
       }
 
-      if (options.createdBy) {
-        query += ' AND p.createdBy = ?';
-        values.push(options.createdBy);
+      if (options.created_by) {
+        query += ' AND p.created_by = ?';
+        values.push(options.created_by);
       }
 
       if (options.search) {
@@ -113,10 +118,10 @@ class Project {
       }
 
       // Group by project
-      query += ' GROUP BY p.id, u.firstName, u.lastName, u.email';
+      query += ' GROUP BY p.id, u.first_name, u.last_name, u.email';
 
       // Add ordering
-      query += ' ORDER BY p.createdAt DESC';
+      query += ' ORDER BY p.created_at DESC';
 
       // Add pagination
       if (options.limit) {
@@ -140,16 +145,16 @@ class Project {
     try {
       let query = `
         SELECT p.*, 
-               pm.role as memberRole,
-               pm.joinedAt,
-               CONCAT(u.firstName, ' ', u.lastName) as createdByName,
-               COUNT(DISTINCT t.id) as totalTasks,
-               COUNT(DISTINCT CASE WHEN t.status = 'done' THEN t.id END) as completedTasks
+               pm.role as member_role,
+               pm.joined_at,
+               CONCAT(u.first_name, ' ', u.last_name) as created_by_name,
+               COUNT(DISTINCT t.id) as total_tasks,
+               COUNT(DISTINCT CASE WHEN t.status = 'done' THEN t.id END) as completed_tasks
         FROM projects p
-        INNER JOIN project_members pm ON p.id = pm.projectId
-        LEFT JOIN users u ON p.createdBy = u.id
-        LEFT JOIN tasks t ON p.id = t.projectId
-        WHERE pm.userId = ? AND p.isActive = TRUE
+        INNER JOIN project_members pm ON p.id = pm.project_id
+        LEFT JOIN users u ON p.created_by = u.id
+        LEFT JOIN tasks t ON p.id = t.project_id
+        WHERE pm.user_id = ?
       `;
       
       const values = [userId];
@@ -159,8 +164,8 @@ class Project {
         values.push(options.status);
       }
 
-      query += ' GROUP BY p.id, pm.role, pm.joinedAt, u.firstName, u.lastName';
-      query += ' ORDER BY pm.joinedAt DESC';
+      query += ' GROUP BY p.id, pm.role, pm.joined_at, u.first_name, u.last_name';
+      query += ' ORDER BY pm.joined_at DESC';
 
       const [rows] = await database.query(query, values);
       return rows.map(row => new Project(row));
@@ -171,7 +176,7 @@ class Project {
 
   static async count(options = {}) {
     try {
-      let query = 'SELECT COUNT(*) as total FROM projects WHERE isActive = TRUE';
+      let query = 'SELECT COUNT(*) as total FROM projects WHERE 1=1';
       const values = [];
 
       if (options.status) {
@@ -179,9 +184,9 @@ class Project {
         values.push(options.status);
       }
 
-      if (options.createdBy) {
-        query += ' AND createdBy = ?';
-        values.push(options.createdBy);
+      if (options.created_by) {
+        query += ' AND created_by = ?';
+        values.push(options.created_by);
       }
 
       const [rows] = await database.query(query, values);

@@ -1,43 +1,52 @@
 import database from '../config/database.js';
 import bcrypt from 'bcryptjs';
-import { formatDateForDB } from '../utils/helpers.js';
+import { formatDateForDB, snakeToCamel, camelToSnake } from '../utils/helpers.js';
 
 class User {
   constructor(data = {}) {
+    // Accept both camelCase (from services) and snake_case (from database)
     this.id = data.id;
-    this.firstName = data.firstName;
-    this.lastName = data.lastName;
+    this.firstName = data.firstName || data.first_name;
+    this.lastName = data.lastName || data.last_name;
     this.email = data.email;
-    this.password = data.password;
+    this.passwordHash = data.passwordHash || data.password_hash;
     this.role = data.role || 'developer';
-    this.avatar = data.avatar;
-    this.lastLoginAt = data.lastLoginAt;
-    this.isActive = data.isActive !== undefined ? data.isActive : true;
-    this.createdAt = data.createdAt;
-    this.updatedAt = data.updatedAt;
+    this.avatarUrl = data.avatarUrl || data.avatar_url;
+    this.lastLogin = data.lastLogin || data.last_login;
+    this.phone = data.phone;
+    this.timezone = data.timezone || 'UTC';
+    this.emailVerified = data.emailVerified || data.email_verified || false;
+    this.emailVerifiedAt = data.emailVerifiedAt || data.email_verified_at;
+    this.isActive = data.isActive !== undefined ? data.isActive : (data.is_active !== undefined ? data.is_active : true);
+    this.createdAt = data.createdAt || data.created_at;
+    this.updatedAt = data.updatedAt || data.updated_at;
   }
 
   // Static methods for database operations
   static async create(userData) {
     try {
       // Hash password before storing
+      let passwordHash = null;
       if (userData.password) {
-        userData.password = await bcrypt.hash(userData.password, 10);
+        passwordHash = await bcrypt.hash(userData.password, 10);
       }
 
       const query = `
-        INSERT INTO users (firstName, lastName, email, password, role, avatar, isActive, createdAt, updatedAt)
-        VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        INSERT INTO users (first_name, last_name, email, password_hash, role, avatar_url, phone, timezone, email_verified, is_active, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
       `;
       
       const values = [
-        userData.firstName,
-        userData.lastName,
+        userData.firstName || userData.first_name,
+        userData.lastName || userData.last_name,
         userData.email,
-        userData.password,
+        passwordHash,
         userData.role || 'developer',
-        userData.avatar || null,
-        userData.isActive !== undefined ? userData.isActive : true
+        userData.avatarUrl || userData.avatar_url || null,
+        userData.phone || null,
+        userData.timezone || 'UTC',
+        userData.emailVerified || userData.email_verified || false,
+        userData.isActive !== undefined ? userData.isActive : (userData.is_active !== undefined ? userData.is_active : true)
       ];
 
       const [result] = await database.query(query, values);
@@ -51,13 +60,14 @@ class User {
 
   static async findById(id) {
     try {
-      const query = 'SELECT * FROM users WHERE id = ? AND isActive = TRUE';
+      const query = 'SELECT * FROM users WHERE id = ? AND is_active = TRUE';
       const [rows] = await database.query(query, [id]);
       
       if (rows.length === 0) {
         return null;
       }
 
+      // Convert from snake_case to camelCase for the model
       return new User(rows[0]);
     } catch (error) {
       throw new Error(`Error finding user by ID: ${error.message}`);
@@ -66,7 +76,7 @@ class User {
 
   static async findByEmail(email) {
     try {
-      const query = 'SELECT * FROM users WHERE email = ? AND isActive = TRUE';
+      const query = 'SELECT * FROM users WHERE email = ? AND is_active = TRUE';
       const [rows] = await database.query(query, [email]);
       
       if (rows.length === 0) {
@@ -81,7 +91,7 @@ class User {
 
   static async findAll(options = {}) {
     try {
-      let query = 'SELECT * FROM users WHERE isActive = TRUE';
+      let query = 'SELECT * FROM users WHERE is_active = TRUE';
       const values = [];
 
       // Add filtering options
@@ -91,13 +101,13 @@ class User {
       }
 
       if (options.search) {
-        query += ' AND (firstName LIKE ? OR lastName LIKE ? OR email LIKE ?)';
+        query += ' AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ?)';
         const searchTerm = `%${options.search}%`;
         values.push(searchTerm, searchTerm, searchTerm);
       }
 
       // Add ordering
-      query += ' ORDER BY createdAt DESC';
+      query += ' ORDER BY created_at DESC';
 
       // Add pagination
       if (options.limit) {
@@ -119,7 +129,7 @@ class User {
 
   static async count(options = {}) {
     try {
-      let query = 'SELECT COUNT(*) as total FROM users WHERE isActive = TRUE';
+      let query = 'SELECT COUNT(*) as total FROM users WHERE is_active = TRUE';
       const values = [];
 
       if (options.role) {
@@ -128,7 +138,7 @@ class User {
       }
 
       if (options.search) {
-        query += ' AND (firstName LIKE ? OR lastName LIKE ? OR email LIKE ?)';
+        query += ' AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ?)';
         const searchTerm = `%${options.search}%`;
         values.push(searchTerm, searchTerm, searchTerm);
       }
@@ -144,7 +154,8 @@ class User {
     try {
       // Hash password if it's being updated
       if (updateData.password) {
-        updateData.password = await bcrypt.hash(updateData.password, 10);
+        updateData.password_hash = await bcrypt.hash(updateData.password, 10);
+        delete updateData.password; // Remove plain password
       }
 
       const fields = [];
@@ -163,7 +174,7 @@ class User {
       }
 
       // Add updated timestamp
-      fields.push('updatedAt = NOW()');
+      fields.push('updated_at = NOW()');
       values.push(id);
 
       const query = `UPDATE users SET ${fields.join(', ')} WHERE id = ?`;
@@ -177,8 +188,8 @@ class User {
 
   static async delete(id) {
     try {
-      // Soft delete - set isActive to false
-      const query = 'UPDATE users SET isActive = FALSE, updatedAt = NOW() WHERE id = ?';
+      // Soft delete - set is_active to false
+      const query = 'UPDATE users SET is_active = FALSE, updated_at = NOW() WHERE id = ?';
       const [result] = await database.query(query, [id]);
       
       return result.affectedRows > 0;
@@ -189,7 +200,7 @@ class User {
 
   static async updateLastLogin(id) {
     try {
-      const query = 'UPDATE users SET lastLoginAt = NOW(), updatedAt = NOW() WHERE id = ?';
+      const query = 'UPDATE users SET last_login = NOW(), updated_at = NOW() WHERE id = ?';
       await database.query(query, [id]);
     } catch (error) {
       throw new Error(`Error updating last login: ${error.message}`);
@@ -206,8 +217,8 @@ class User {
         // Create new user
         const created = await User.create(this.toObject());
         this.id = created.id;
-        this.createdAt = created.createdAt;
-        this.updatedAt = created.updatedAt;
+        this.created_at = created.created_at;
+        this.updated_at = created.updated_at;
         return this;
       }
     } catch (error) {
@@ -217,7 +228,7 @@ class User {
 
   async comparePassword(candidatePassword) {
     try {
-      return await bcrypt.compare(candidatePassword, this.password);
+      return await bcrypt.compare(candidatePassword, this.passwordHash);
     } catch (error) {
       throw new Error(`Error comparing password: ${error.message}`);
     }
@@ -226,11 +237,11 @@ class User {
   async getProjects() {
     try {
       const query = `
-        SELECT p.*, pm.role as memberRole, pm.joinedAt
+        SELECT p.*, pm.role as member_role, pm.joined_at
         FROM projects p
-        INNER JOIN project_members pm ON p.id = pm.projectId
-        WHERE pm.userId = ? AND p.isActive = TRUE
-        ORDER BY pm.joinedAt DESC
+        INNER JOIN project_members pm ON p.id = pm.project_id
+        WHERE pm.user_id = ? AND p.status != 'cancelled'
+        ORDER BY pm.joined_at DESC
       `;
       
       const [rows] = await database.query(query, [this.id]);
@@ -243,10 +254,10 @@ class User {
   async getTasks(options = {}) {
     try {
       let query = `
-        SELECT t.*, p.name as projectName
+        SELECT t.*, p.name as project_name
         FROM tasks t
-        INNER JOIN projects p ON t.projectId = p.id
-        WHERE t.assignedTo = ?
+        INNER JOIN projects p ON t.project_id = p.id
+        WHERE t.assigned_to = ?
       `;
       const values = [this.id];
 
@@ -255,12 +266,12 @@ class User {
         values.push(options.status);
       }
 
-      if (options.projectId) {
-        query += ' AND t.projectId = ?';
-        values.push(options.projectId);
+      if (options.project_id) {
+        query += ' AND t.project_id = ?';
+        values.push(options.project_id);
       }
 
-      query += ' ORDER BY t.createdAt DESC';
+      query += ' ORDER BY t.created_at DESC';
 
       if (options.limit) {
         query += ' LIMIT ?';
@@ -280,10 +291,14 @@ class User {
       firstName: this.firstName,
       lastName: this.lastName,
       email: this.email,
-      password: this.password,
+      passwordHash: this.passwordHash,
       role: this.role,
-      avatar: this.avatar,
-      lastLoginAt: this.lastLoginAt,
+      avatarUrl: this.avatarUrl,
+      lastLogin: this.lastLogin,
+      phone: this.phone,
+      timezone: this.timezone,
+      emailVerified: this.emailVerified,
+      emailVerifiedAt: this.emailVerifiedAt,
       isActive: this.isActive,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt
@@ -292,8 +307,8 @@ class User {
 
   toJSON() {
     const obj = this.toObject();
-    // Remove password from JSON representation
-    delete obj.password;
+    // Remove password_hash from JSON representation
+    delete obj.passwordHash;
     return obj;
   }
 
@@ -301,102 +316,12 @@ class User {
     return `${this.firstName} ${this.lastName}`.trim();
   }
 
-  // Password reset token methods
-  static async setPasswordResetToken(userId, resetToken, resetTokenExpiry) {
-    try {
-      const query = `
-        UPDATE users 
-        SET passwordResetToken = ?, passwordResetExpiry = ?, updatedAt = NOW()
-        WHERE id = ?
-      `;
-      
-      await database.query(query, [resetToken, resetTokenExpiry, userId]);
-      return true;
-    } catch (error) {
-      throw new Error(`Error setting password reset token: ${error.message}`);
-    }
-  }
-
-  static async findByPasswordResetToken(resetToken) {
-    try {
-      const query = `
-        SELECT id, firstName, lastName, email, role, avatar, lastLoginAt, isActive, 
-               createdAt, updatedAt, passwordResetToken, passwordResetExpiry
-        FROM users 
-        WHERE passwordResetToken = ? AND passwordResetExpiry > NOW() AND isActive = true
-      `;
-      
-      const [rows] = await database.query(query, [resetToken]);
-      
-      if (rows.length === 0) {
-        return null;
-      }
-      
-      return new User(rows[0]);
-    } catch (error) {
-      throw new Error(`Error finding user by password reset token: ${error.message}`);
-    }
-  }
-
-  static async resetPasswordWithToken(userId, newPassword) {
-    try {
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
-      
-      const query = `
-        UPDATE users 
-        SET password = ?, passwordResetToken = NULL, passwordResetExpiry = NULL, updatedAt = NOW()
-        WHERE id = ?
-      `;
-      
-      await database.query(query, [hashedPassword, userId]);
-      return true;
-    } catch (error) {
-      throw new Error(`Error resetting password: ${error.message}`);
-    }
-  }
-
   // Email verification methods
-  static async setEmailVerificationToken(userId, verificationToken, verificationExpiry) {
+  static async verifyEmail(userId) {
     try {
       const query = `
         UPDATE users 
-        SET emailVerificationToken = ?, emailVerificationExpiry = ?, updatedAt = NOW()
-        WHERE id = ?
-      `;
-      
-      await database.query(query, [verificationToken, verificationExpiry, userId]);
-      return true;
-    } catch (error) {
-      throw new Error(`Error setting email verification token: ${error.message}`);
-    }
-  }
-
-  static async findByEmailVerificationToken(verificationToken) {
-    try {
-      const query = `
-        SELECT id, firstName, lastName, email, role, avatar, lastLoginAt, isActive, 
-               createdAt, updatedAt, emailVerified, emailVerificationToken, emailVerificationExpiry
-        FROM users 
-        WHERE emailVerificationToken = ? AND emailVerificationExpiry > NOW() AND isActive = true
-      `;
-      
-      const [rows] = await database.query(query, [verificationToken]);
-      
-      if (rows.length === 0) {
-        return null;
-      }
-      
-      return new User(rows[0]);
-    } catch (error) {
-      throw new Error(`Error finding user by email verification token: ${error.message}`);
-    }
-  }
-
-  static async verifyEmailWithToken(userId) {
-    try {
-      const query = `
-        UPDATE users 
-        SET emailVerified = true, emailVerificationToken = NULL, emailVerificationExpiry = NULL, updatedAt = NOW()
+        SET email_verified = true, email_verified_at = NOW(), updated_at = NOW()
         WHERE id = ?
       `;
       
@@ -411,11 +336,14 @@ class User {
   static validateCreate(data) {
     const errors = [];
 
-    if (!data.firstName || data.firstName.trim().length === 0) {
+    const firstName = data.firstName || data.first_name;
+    const lastName = data.lastName || data.last_name;
+
+    if (!firstName || firstName.trim().length === 0) {
       errors.push('First name is required');
     }
 
-    if (!data.lastName || data.lastName.trim().length === 0) {
+    if (!lastName || lastName.trim().length === 0) {
       errors.push('Last name is required');
     }
 
@@ -429,7 +357,7 @@ class User {
       errors.push('Password must be at least 6 characters long');
     }
 
-    if (data.role && !['admin', 'project_manager', 'developer', 'viewer'].includes(data.role)) {
+    if (data.role && !['admin', 'manager', 'developer'].includes(data.role)) {
       errors.push('Invalid role specified');
     }
 
@@ -439,11 +367,14 @@ class User {
   static validateUpdate(data) {
     const errors = [];
 
-    if (data.firstName !== undefined && data.firstName.trim().length === 0) {
+    const firstName = data.firstName || data.first_name;
+    const lastName = data.lastName || data.last_name;
+
+    if (firstName !== undefined && firstName.trim().length === 0) {
       errors.push('First name cannot be empty');
     }
 
-    if (data.lastName !== undefined && data.lastName.trim().length === 0) {
+    if (lastName !== undefined && lastName.trim().length === 0) {
       errors.push('Last name cannot be empty');
     }
 
@@ -459,7 +390,7 @@ class User {
       errors.push('Password must be at least 6 characters long');
     }
 
-    if (data.role && !['admin', 'project_manager', 'developer', 'viewer'].includes(data.role)) {
+    if (data.role && !['admin', 'manager', 'developer'].includes(data.role)) {
       errors.push('Invalid role specified');
     }
 

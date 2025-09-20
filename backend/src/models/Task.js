@@ -1,49 +1,54 @@
 import database from '../config/database.js';
-import { formatDateForDB } from '../utils/helpers.js';
+import { formatDateForDB, snakeToCamel, camelToSnake } from '../utils/helpers.js';
 
 class Task {
   constructor(data = {}) {
+    // Accept both camelCase (from services) and snake_case (from database)
     this.id = data.id;
-    this.projectId = data.projectId;
-    this.userStoryId = data.userStoryId;
+    this.projectId = data.projectId || data.project_id;
     this.title = data.title;
     this.description = data.description;
     this.status = data.status || 'todo';
     this.priority = data.priority || 'medium';
-    this.assignedTo = data.assignedTo;
-    this.createdBy = data.createdBy;
-    this.estimatedHours = data.estimatedHours;
-    this.actualHours = data.actualHours || 0;
-    this.dueDate = data.dueDate;
-    this.startDate = data.startDate;
-    this.completedAt = data.completedAt;
-    this.createdAt = data.createdAt;
-    this.updatedAt = data.updatedAt;
+    this.assignedTo = data.assignedTo || data.assigned_to;
+    this.createdBy = data.createdBy || data.created_by;
+    this.estimatedHours = data.estimatedHours || data.estimated_hours;
+    this.actualHours = data.actualHours || data.actual_hours || 0;
+    this.dueDate = data.dueDate || data.due_date;
+    this.completedAt = data.completedAt || data.completed_at;
+    this.tags = data.tags;
+    this.storyPoints = data.storyPoints || data.story_points;
+    this.blocked = data.blocked || false;
+    this.blockedReason = data.blockedReason || data.blocked_reason;
+    this.createdAt = data.createdAt || data.created_at;
+    this.updatedAt = data.updatedAt || data.updated_at;
   }
 
   // Static methods for database operations
   static async create(taskData) {
     try {
       const query = `
-        INSERT INTO tasks (projectId, userStoryId, title, description, status, priority, 
-                          assignedTo, createdBy, estimatedHours, actualHours, dueDate, 
-                          startDate, createdAt, updatedAt)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        INSERT INTO tasks (project_id, title, description, status, priority, 
+                          assigned_to, created_by, estimated_hours, actual_hours, due_date, 
+                          tags, story_points, blocked, blocked_reason, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
       `;
       
       const values = [
-        taskData.projectId,
-        taskData.userStoryId || null,
+        taskData.projectId || taskData.project_id,
         taskData.title,
         taskData.description || null,
         taskData.status || 'todo',
         taskData.priority || 'medium',
-        taskData.assignedTo || null,
-        taskData.createdBy,
-        taskData.estimatedHours || null,
-        taskData.actualHours || 0,
-        taskData.dueDate ? formatDateForDB(taskData.dueDate) : null,
-        taskData.startDate ? formatDateForDB(taskData.startDate) : null
+        taskData.assignedTo || taskData.assigned_to || null,
+        taskData.createdBy || taskData.created_by,
+        taskData.estimatedHours || taskData.estimated_hours || null,
+        taskData.actualHours || taskData.actual_hours || 0,
+        taskData.dueDate ? formatDateForDB(taskData.dueDate) : (taskData.due_date ? formatDateForDB(taskData.due_date) : null),
+        taskData.tags ? JSON.stringify(taskData.tags) : null,
+        taskData.storyPoints || taskData.story_points || null,
+        taskData.blocked || false,
+        taskData.blockedReason || taskData.blocked_reason || null
       ];
 
       const [result] = await database.query(query, values);

@@ -1,516 +1,197 @@
-import { 
-  Project, 
-  Task, 
-  User, 
-  Comment, 
-  TimeEntry, 
-  ActivityLog,
-  ProjectMember,
-  TaskAssignment 
-} from '../models/index.js';
+import database from '../config/database.js';
+import { snakeToCamel } from '../utils/helpers.js';
 
 class SearchService {
   /**
-   * Perform unified search across multiple entities
-   * @param {Object} params - Search parameters
-   * @param {string} params.query - Search query string
-   * @param {Array} params.types - Types to search in ['projects', 'tasks', 'users', 'comments']
-   * @param {Object} params.filters - Additional filters
-   * @param {Object} params.pagination - Pagination options
-   * @param {number} params.userId - Current user ID for permission filtering
-   * @returns {Object} Search results grouped by type
+   * Unified search across multiple entities
    */
-  async unifiedSearch({ query, types = ['projects', 'tasks', 'users', 'comments'], filters = {}, pagination = {}, userId }) {
-    const results = {};
-    const { limit = 10, offset = 0 } = pagination;
-
-    // Build search options
-    const searchOptions = this._buildSearchOptions(query, filters, { limit, offset }, userId);
-
-    // Search each requested type
-    if (types.includes('projects')) {
-      results.projects = await this.searchProjects({ ...searchOptions, userId });
-    }
-
-    if (types.includes('tasks')) {
-      results.tasks = await this.searchTasks({ ...searchOptions, userId });
-    }
-
-    if (types.includes('users')) {
-      results.users = await this.searchUsers({ ...searchOptions, userId });
-    }
-
-    if (types.includes('comments')) {
-      results.comments = await this.searchComments({ ...searchOptions, userId });
-    }
-
-    return {
-      results,
-      query,
-      types,
-      filters,
-      pagination
-    };
-  }
-
-  /**
-   * Search projects with advanced filtering
-   * @param {Object} params - Search parameters
-   * @returns {Object} Projects and metadata
-   */
-  async searchProjects({ query, filters = {}, pagination = {}, userId }) {
-    const { limit = 10, offset = 0 } = pagination;
-    const whereClause = this._buildProjectSearchWhere(query, filters, userId);
-    const orderClause = this._buildOrderClause(filters.sortBy, filters.sortOrder);
-
-    const { count, rows } = await Project.findAndCountAll({
-      where: whereClause,
-      include: [
-        {
-          model: User,
-          as: 'owner',
-          attributes: ['id', 'firstName', 'lastName', 'email']
-        },
-        {
-          model: ProjectMember,
-          as: 'members',
-          include: [{
-            model: User,
-            as: 'user',
-            attributes: ['id', 'firstName', 'lastName', 'email']
-          }]
-        },
-        {
-          model: Task,
-          as: 'tasks',
-          attributes: ['id', 'title', 'status', 'priority']
-        }
-      ],
-      order: orderClause,
-      limit,
-      offset,
-      distinct: true
-    });
-
-    return {
-      projects: rows,
-      total: count,
-      pagination: {
-        limit,
-        offset,
-        totalPages: Math.ceil(count / limit),
-        currentPage: Math.floor(offset / limit) + 1
+  async unifiedSearch(options = {}) {
+    const { query = '', page = 1, limit = 20, userId } = options;
+    
+    try {
+      if (!query || query.trim().length === 0) {
+        return {
+          projects: [],
+          tasks: [],
+          users: [],
+          comments: [],
+          pagination: {
+            totalItems: 0,
+            totalPages: 0,
+            currentPage: page,
+            itemsPerPage: limit
+          }
+        };
       }
-    };
-  }
 
-  /**
-   * Search tasks with advanced filtering
-   * @param {Object} params - Search parameters
-   * @returns {Object} Tasks and metadata
-   */
-  async searchTasks({ query, filters = {}, pagination = {}, userId }) {
-    const { limit = 10, offset = 0 } = pagination;
-    const whereClause = this._buildTaskSearchWhere(query, filters, userId);
-    const orderClause = this._buildOrderClause(filters.sortBy, filters.sortOrder);
+      // Search projects
+      const projects = await this.searchProjects({ query, userId, limit: 5 });
+      
+      // Search tasks  
+      const tasks = await this.searchTasks({ query, userId, limit: 5 });
+      
+      // Search users
+      const users = await this.searchUsers({ query, limit: 5 });
+      
+      // Search comments
+      const comments = await this.searchComments({ query, userId, limit: 5 });
 
-    const { count, rows } = await Task.findAndCountAll({
-      where: whereClause,
-      include: [
-        {
-          model: Project,
-          as: 'project',
-          attributes: ['id', 'name', 'description'],
-          include: [{
-            model: ProjectMember,
-            as: 'members',
-            where: { userId },
-            required: false
-          }]
-        },
-        {
-          model: User,
-          as: 'creator',
-          attributes: ['id', 'firstName', 'lastName', 'email']
-        },
-        {
-          model: TaskAssignment,
-          as: 'assignments',
-          include: [{
-            model: User,
-            as: 'user',
-            attributes: ['id', 'firstName', 'lastName', 'email']
-          }]
-        },
-        {
-          model: TimeEntry,
-          as: 'timeEntries',
-          attributes: ['id', 'duration', 'date']
+      const totalItems = projects.length + tasks.length + users.length + comments.length;
+
+      return {
+        projects,
+        tasks,
+        users,
+        comments,
+        pagination: {
+          totalItems,
+          totalPages: Math.ceil(totalItems / limit),
+          currentPage: page,
+          itemsPerPage: limit
         }
-      ],
-      order: orderClause,
-      limit,
-      offset,
-      distinct: true
-    });
+      };
+      
+    } catch (error) {
+      throw error;
+    }
+  }
 
-    return {
-      tasks: rows,
-      total: count,
-      pagination: {
-        limit,
-        offset,
-        totalPages: Math.ceil(count / limit),
-        currentPage: Math.floor(offset / limit) + 1
+  /**
+   * Search projects
+   */
+  async searchProjects(options = {}) {
+    const { query = '', userId, limit = 10 } = options;
+    
+    try {
+      let sqlQuery = `
+        SELECT p.*, CONCAT(u.first_name, ' ', u.last_name) as created_by_name
+        FROM projects p
+        LEFT JOIN users u ON p.created_by = u.id
+        WHERE (p.name LIKE ? OR p.description LIKE ?)
+      `;
+      
+      const queryParams = [`%${query}%`, `%${query}%`];
+      
+      if (userId) {
+        sqlQuery += ` AND (p.created_by = ? OR EXISTS (
+          SELECT 1 FROM project_members pm 
+          WHERE pm.project_id = p.id AND pm.user_id = ?
+        ))`;
+        queryParams.push(userId, userId);
       }
-    };
+      
+      sqlQuery += ` ORDER BY p.created_at DESC LIMIT ?`;
+      queryParams.push(limit);
+      
+      const [rows] = await database.query(sqlQuery, queryParams);
+      return rows.map(row => snakeToCamel(row));
+      
+    } catch (error) {
+      throw error;
+    }
   }
 
   /**
-   * Search users with filtering
-   * @param {Object} params - Search parameters
-   * @returns {Object} Users and metadata
+   * Search tasks
    */
-  async searchUsers({ query, filters = {}, pagination = {}, userId }) {
-    const { limit = 10, offset = 0 } = pagination;
-    const whereClause = this._buildUserSearchWhere(query, filters);
-    const orderClause = this._buildOrderClause(filters.sortBy, filters.sortOrder);
-
-    const { count, rows } = await User.findAndCountAll({
-      where: whereClause,
-      attributes: { exclude: ['password', 'refreshToken'] },
-      include: [
-        {
-          model: ProjectMember,
-          as: 'projectMemberships',
-          include: [{
-            model: Project,
-            as: 'project',
-            attributes: ['id', 'name', 'status']
-          }]
-        }
-      ],
-      order: orderClause,
-      limit,
-      offset,
-      distinct: true
-    });
-
-    return {
-      users: rows,
-      total: count,
-      pagination: {
-        limit,
-        offset,
-        totalPages: Math.ceil(count / limit),
-        currentPage: Math.floor(offset / limit) + 1
+  async searchTasks(options = {}) {
+    const { query = '', userId, limit = 10 } = options;
+    
+    try {
+      let sqlQuery = `
+        SELECT t.*, p.name as project_name,
+               CONCAT(u_assigned.first_name, ' ', u_assigned.last_name) as assigned_to_name,
+               CONCAT(u_created.first_name, ' ', u_created.last_name) as created_by_name
+        FROM tasks t
+        LEFT JOIN projects p ON t.project_id = p.id
+        LEFT JOIN users u_assigned ON t.assigned_to = u_assigned.id
+        LEFT JOIN users u_created ON t.created_by = u_created.id
+        WHERE (t.title LIKE ? OR t.description LIKE ?)
+      `;
+      
+      const queryParams = [`%${query}%`, `%${query}%`];
+      
+      if (userId) {
+        sqlQuery += ` AND (t.assigned_to = ? OR t.created_by = ? OR EXISTS (
+          SELECT 1 FROM project_members pm 
+          WHERE pm.project_id = t.project_id AND pm.user_id = ?
+        ))`;
+        queryParams.push(userId, userId, userId);
       }
-    };
+      
+      sqlQuery += ` ORDER BY t.created_at DESC LIMIT ?`;
+      queryParams.push(limit);
+      
+      const [rows] = await database.query(sqlQuery, queryParams);
+      return rows.map(row => snakeToCamel(row));
+      
+    } catch (error) {
+      throw error;
+    }
   }
 
   /**
-   * Search comments with filtering
-   * @param {Object} params - Search parameters
-   * @returns {Object} Comments and metadata
+   * Search users
    */
-  async searchComments({ query, filters = {}, pagination = {}, userId }) {
-    const { limit = 10, offset = 0 } = pagination;
-    const whereClause = this._buildCommentSearchWhere(query, filters, userId);
-    const orderClause = this._buildOrderClause(filters.sortBy, filters.sortOrder);
+  async searchUsers(options = {}) {
+    const { query = '', limit = 10 } = options;
+    
+    try {
+      const sqlQuery = `
+        SELECT id, first_name, last_name, email, role, avatar_url, created_at
+        FROM users 
+        WHERE is_active = TRUE 
+        AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ?)
+        ORDER BY created_at DESC 
+        LIMIT ?
+      `;
+      
+      const queryParams = [`%${query}%`, `%${query}%`, `%${query}%`, limit];
+      
+      const [rows] = await database.query(sqlQuery, queryParams);
+      return rows.map(row => snakeToCamel(row));
+      
+    } catch (error) {
+      throw error;
+    }
+  }
 
-    const { count, rows } = await Comment.findAndCountAll({
-      where: whereClause,
-      include: [
-        {
-          model: User,
-          as: 'author',
-          attributes: ['id', 'firstName', 'lastName', 'email']
-        },
-        {
-          model: Task,
-          as: 'task',
-          attributes: ['id', 'title', 'status'],
-          include: [{
-            model: Project,
-            as: 'project',
-            attributes: ['id', 'name'],
-            include: [{
-              model: ProjectMember,
-              as: 'members',
-              where: { userId },
-              required: true
-            }]
-          }]
-        }
-      ],
-      order: orderClause,
-      limit,
-      offset,
-      distinct: true
-    });
-
-    return {
-      comments: rows,
-      total: count,
-      pagination: {
-        limit,
-        offset,
-        totalPages: Math.ceil(count / limit),
-        currentPage: Math.floor(offset / limit) + 1
+  /**
+   * Search comments
+   */
+  async searchComments(options = {}) {
+    const { query = '', userId, limit = 10 } = options;
+    
+    try {
+      let sqlQuery = `
+        SELECT c.*, t.title as task_title, p.name as project_name,
+               CONCAT(u.first_name, ' ', u.last_name) as user_name
+        FROM task_comments c
+        LEFT JOIN tasks t ON c.task_id = t.id
+        LEFT JOIN projects p ON t.project_id = p.id
+        LEFT JOIN users u ON c.user_id = u.id
+        WHERE c.comment LIKE ?
+      `;
+      
+      const queryParams = [`%${query}%`];
+      
+      if (userId) {
+        sqlQuery += ` AND EXISTS (
+          SELECT 1 FROM project_members pm 
+          WHERE pm.project_id = t.project_id AND pm.user_id = ?
+        )`;
+        queryParams.push(userId);
       }
-    };
-  }
-
-  /**
-   * Get search suggestions based on partial query
-   * @param {Object} params - Search parameters
-   * @returns {Object} Suggestions grouped by type
-   */
-  async getSearchSuggestions({ query, types = ['projects', 'tasks', 'users'], userId }) {
-    if (!query || query.length < 2) {
-      return { suggestions: {} };
+      
+      sqlQuery += ` ORDER BY c.created_at DESC LIMIT ?`;
+      queryParams.push(limit);
+      
+      const [rows] = await database.query(sqlQuery, queryParams);
+      return rows.map(row => snakeToCamel(row));
+      
+    } catch (error) {
+      throw error;
     }
-
-    const suggestions = {};
-    const limit = 5; // Limit suggestions per type
-
-    if (types.includes('projects')) {
-      const projects = await Project.findAll({
-        where: this._buildProjectSearchWhere(query, {}, userId),
-        attributes: ['id', 'name'],
-        limit
-      });
-      suggestions.projects = projects.map(p => ({ id: p.id, name: p.name, type: 'project' }));
-    }
-
-    if (types.includes('tasks')) {
-      const tasks = await Task.findAll({
-        where: this._buildTaskSearchWhere(query, {}, userId),
-        attributes: ['id', 'title'],
-        include: [{
-          model: Project,
-          as: 'project',
-          attributes: ['name'],
-          include: [{
-            model: ProjectMember,
-            as: 'members',
-            where: { userId },
-            required: false
-          }]
-        }],
-        limit
-      });
-      suggestions.tasks = tasks.map(t => ({ id: t.id, name: t.title, type: 'task', project: t.project?.name }));
-    }
-
-    if (types.includes('users')) {
-      const users = await User.findAll({
-        where: this._buildUserSearchWhere(query, {}),
-        attributes: ['id', 'firstName', 'lastName'],
-        limit
-      });
-      suggestions.users = users.map(u => ({ 
-        id: u.id, 
-        name: `${u.firstName} ${u.lastName}`, 
-        type: 'user' 
-      }));
-    }
-
-    return { suggestions };
-  }
-
-  /**
-   * Get available filter options for advanced search
-   * @param {number} userId - Current user ID
-   * @returns {Object} Available filter options
-   */
-  async getFilterOptions(userId) {
-    // Get user's accessible projects
-    const projects = await Project.findAll({
-      include: [{
-        model: ProjectMember,
-        as: 'members',
-        where: { userId },
-        required: false
-      }],
-      where: {
-        [Op.or]: [
-          { ownerId: userId },
-          { '$members.userId$': userId }
-        ]
-      },
-      attributes: ['id', 'name', 'status']
-    });
-
-    // Get available statuses
-    const projectStatuses = ['active', 'completed', 'on_hold', 'cancelled'];
-    const taskStatuses = ['todo', 'in_progress', 'review', 'done'];
-    const taskPriorities = ['low', 'medium', 'high', 'urgent'];
-
-    return {
-      projects: projects.map(p => ({ id: p.id, name: p.name })),
-      projectStatuses,
-      taskStatuses,
-      taskPriorities,
-      userRoles: ['admin', 'manager', 'developer', 'designer', 'tester']
-    };
-  }
-
-  // Private helper methods
-  _buildSearchOptions(query, filters, pagination, userId) {
-    return { query, filters, pagination, userId };
-  }
-
-  _buildProjectSearchWhere(query, filters, userId) {
-    const where = {
-      [Op.and]: []
-    };
-
-    // Text search
-    if (query) {
-      where[Op.and].push({
-        [Op.or]: [
-          { name: { [Op.iLike]: `%${query}%` } },
-          { description: { [Op.iLike]: `%${query}%` } }
-        ]
-      });
-    }
-
-    // Status filter
-    if (filters.status) {
-      where[Op.and].push({ status: filters.status });
-    }
-
-    // Date range filter
-    if (filters.startDate || filters.endDate) {
-      const dateFilter = {};
-      if (filters.startDate) dateFilter[Op.gte] = new Date(filters.startDate);
-      if (filters.endDate) dateFilter[Op.lte] = new Date(filters.endDate);
-      where[Op.and].push({ createdAt: dateFilter });
-    }
-
-    // User access filter
-    where[Op.and].push({
-      [Op.or]: [
-        { ownerId: userId },
-        { '$members.userId$': userId }
-      ]
-    });
-
-    return where[Op.and].length > 0 ? where : {};
-  }
-
-  _buildTaskSearchWhere(query, filters, userId) {
-    const where = {
-      [Op.and]: []
-    };
-
-    // Text search
-    if (query) {
-      where[Op.and].push({
-        [Op.or]: [
-          { title: { [Op.iLike]: `%${query}%` } },
-          { description: { [Op.iLike]: `%${query}%` } }
-        ]
-      });
-    }
-
-    // Status filter
-    if (filters.status) {
-      where[Op.and].push({ status: filters.status });
-    }
-
-    // Priority filter
-    if (filters.priority) {
-      where[Op.and].push({ priority: filters.priority });
-    }
-
-    // Project filter
-    if (filters.projectId) {
-      where[Op.and].push({ projectId: filters.projectId });
-    }
-
-    // Assignee filter
-    if (filters.assigneeId) {
-      where[Op.and].push({ '$assignments.userId$': filters.assigneeId });
-    }
-
-    // Due date filter
-    if (filters.dueDate) {
-      const dueDate = new Date(filters.dueDate);
-      where[Op.and].push({ dueDate: { [Op.lte]: dueDate } });
-    }
-
-    return where[Op.and].length > 0 ? where : {};
-  }
-
-  _buildUserSearchWhere(query, filters) {
-    const where = {
-      [Op.and]: []
-    };
-
-    // Text search
-    if (query) {
-      where[Op.and].push({
-        [Op.or]: [
-          { firstName: { [Op.iLike]: `%${query}%` } },
-          { lastName: { [Op.iLike]: `%${query}%` } },
-          { email: { [Op.iLike]: `%${query}%` } }
-        ]
-      });
-    }
-
-    // Role filter
-    if (filters.role) {
-      where[Op.and].push({ role: filters.role });
-    }
-
-    // Active users only
-    where[Op.and].push({ isEmailVerified: true });
-
-    return where[Op.and].length > 0 ? where : {};
-  }
-
-  _buildCommentSearchWhere(query, filters, userId) {
-    const where = {
-      [Op.and]: []
-    };
-
-    // Text search
-    if (query) {
-      where[Op.and].push({
-        content: { [Op.iLike]: `%${query}%` }
-      });
-    }
-
-    // Project filter
-    if (filters.projectId) {
-      where[Op.and].push({ '$task.projectId$': filters.projectId });
-    }
-
-    // Task filter
-    if (filters.taskId) {
-      where[Op.and].push({ taskId: filters.taskId });
-    }
-
-    return where[Op.and].length > 0 ? where : {};
-  }
-
-  _buildOrderClause(sortBy = 'createdAt', sortOrder = 'DESC') {
-    const validSortFields = {
-      name: 'name',
-      title: 'title',
-      createdAt: 'createdAt',
-      updatedAt: 'updatedAt',
-      status: 'status',
-      priority: 'priority',
-      dueDate: 'dueDate'
-    };
-
-    const field = validSortFields[sortBy] || 'createdAt';
-    const order = sortOrder.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
-
-    return [[field, order]];
   }
 }
 

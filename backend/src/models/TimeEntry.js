@@ -1,18 +1,17 @@
 import database from '../config/database.js';
-import { formatDateForDB } from '../utils/helpers.js';
+import { formatDateForDB, snakeToCamel, camelToSnake } from '../utils/helpers.js';
 
 class TimeEntry {
   constructor(data = {}) {
+    // Accept both camelCase (from services) and snake_case (from database)
     this.id = data.id;
-    this.taskId = data.taskId;
-    this.userId = data.userId;
+    this.taskId = data.taskId || data.task_id;
+    this.userId = data.userId || data.user_id;
     this.description = data.description;
-    this.startTime = data.startTime;
-    this.endTime = data.endTime;
-    this.duration = data.duration; // in minutes
-    this.billable = data.billable !== undefined ? data.billable : true;
-    this.createdAt = data.createdAt;
-    this.updatedAt = data.updatedAt;
+    this.hoursSpent = data.hoursSpent || data.hours_spent;
+    this.startTime = data.startTime || data.start_time;
+    this.endTime = data.endTime || data.end_time;
+    this.createdAt = data.createdAt || data.created_at;
   }
 
   // Static methods for database operations
