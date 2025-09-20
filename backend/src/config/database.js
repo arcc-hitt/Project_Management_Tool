@@ -22,12 +22,12 @@ class Database {
 
       // Test the connection
       const connection = await this.pool.getConnection();
-      console.log('✅ Database connected successfully');
+      console.log('Database connected successfully');
       connection.release();
       
       return this.pool;
     } catch (error) {
-      console.error('❌ Database connection failed:', error.message);
+      console.error('Database connection failed:', error.message);
       throw error;
     }
   }

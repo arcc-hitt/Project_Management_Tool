@@ -14,7 +14,7 @@ import { limiter } from './middleware/rateLimiter.js';
 // Import routes
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
-// import projectRoutes from './routes/projects.js';
+import projectRoutes from './routes/projects.js';
 // import taskRoutes from './routes/tasks.js';
 // import dashboardRoutes from './routes/dashboard.js';
 // import aiRoutes from './routes/ai.js';
@@ -80,7 +80,7 @@ app.get('/health', (req, res) => {
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
-// app.use('/api/projects', projectRoutes);
+app.use('/api/projects', projectRoutes);
 // app.use('/api/tasks', taskRoutes);
 // app.use('/api/dashboard', dashboardRoutes);
 // app.use('/api/ai', aiRoutes);
@@ -107,8 +107,8 @@ const startServer = async () => {
     
     // Start server
     const server = app.listen(config.port, () => {
-      console.log(`🚀 Server running on port ${config.port} in ${config.nodeEnv} mode`);
-      console.log(`📖 API Documentation: http://localhost:${config.port}/api/docs`);
+      console.log(`Server running on port ${config.port} in ${config.nodeEnv} mode`);
+      console.log(`API Documentation: http://localhost:${config.port}/api/docs`);
     });
 
     // Graceful shutdown
@@ -120,10 +120,10 @@ const startServer = async () => {
         
         try {
           await database.close();
-          console.log('✅ Graceful shutdown completed');
+          console.log('Graceful shutdown completed');
           process.exit(0);
         } catch (error) {
-          console.error('❌ Error during shutdown:', error);
+          console.error('Error during shutdown:', error);
           process.exit(1);
         }
       });
@@ -134,7 +134,7 @@ const startServer = async () => {
     process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
   } catch (error) {
-    console.error('❌ Failed to start server:', error);
+    console.error('Failed to start server:', error);
     process.exit(1);
   }
 };
