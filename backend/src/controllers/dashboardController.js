@@ -333,6 +333,165 @@ class DashboardController {
 
     return csv.join('\n');
   }
+
+  /**
+   * Get time tracking analytics
+   */
+  async getTimeAnalytics(req, res) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json(formatErrorResponse('Validation failed', errors.array()));
+      }
+
+      const { user } = req;
+      const options = {
+        dateRange: req.query.dateRange || '30',
+        projectId: req.query.projectId ? parseInt(req.query.projectId) : null
+      };
+
+      const timeAnalytics = await dashboardService.getTimeStatistics(user.id, user.role, 
+        dashboardService.getDateFilter(options.dateRange), options.projectId);
+
+      res.status(200).json(formatApiResponse(timeAnalytics, 'Time analytics retrieved successfully'));
+
+    } catch (error) {
+      console.error('Get time analytics error:', error);
+      res.status(500).json(formatErrorResponse('Failed to retrieve time analytics', error.message));
+    }
+  }
+
+  /**
+   * Get detailed project analytics
+   */
+  async getProjectAnalytics(req, res) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json(formatErrorResponse('Validation failed', errors.array()));
+      }
+
+      const { user } = req;
+      const projectId = parseInt(req.params.projectId);
+      const options = {
+        dateRange: req.query.dateRange || '30'
+      };
+
+      const projectAnalytics = await dashboardService.getProjectAnalytics(
+        projectId, user.id, user.role, options);
+
+      res.status(200).json(formatApiResponse(projectAnalytics, 'Project analytics retrieved successfully'));
+
+    } catch (error) {
+      console.error('Get project analytics error:', error);
+      if (error.message.includes('not found') || error.message.includes('Access denied')) {
+        return res.status(404).json(formatErrorResponse(error.message));
+      }
+      res.status(500).json(formatErrorResponse('Failed to retrieve project analytics', error.message));
+    }
+  }
+
+  /**
+   * Get team productivity metrics
+   */
+  async getTeamProductivity(req, res) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json(formatErrorResponse('Validation failed', errors.array()));
+      }
+
+      const { user } = req;
+      const options = {
+        dateRange: req.query.dateRange || '30',
+        projectId: req.query.projectId ? parseInt(req.query.projectId) : null
+      };
+
+      const productivity = await dashboardService.getTeamProductivity(user.id, user.role, options);
+
+      res.status(200).json(formatApiResponse(productivity, 'Team productivity retrieved successfully'));
+
+    } catch (error) {
+      console.error('Get team productivity error:', error);
+      res.status(500).json(formatErrorResponse('Failed to retrieve team productivity', error.message));
+    }
+  }
+
+  /**
+   * Get time distribution analytics
+   */
+  async getTimeDistribution(req, res) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json(formatErrorResponse('Validation failed', errors.array()));
+      }
+
+      const { user } = req;
+      const options = {
+        dateRange: req.query.dateRange || '30',
+        projectId: req.query.projectId ? parseInt(req.query.projectId) : null
+      };
+
+      const timeDistribution = await dashboardService.getTimeDistribution(
+        user.id, user.role, 
+        dashboardService.getDateFilter(options.dateRange), 
+        options.projectId
+      );
+
+      res.status(200).json(formatApiResponse(timeDistribution, 'Time distribution retrieved successfully'));
+
+    } catch (error) {
+      console.error('Get time distribution error:', error);
+      res.status(500).json(formatErrorResponse('Failed to retrieve time distribution', error.message));
+    }
+  }
+
+  /**
+   * Get comprehensive analytics summary
+   */
+  async getAnalyticsSummary(req, res) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json(formatErrorResponse('Validation failed', errors.array()));
+      }
+
+      const { user } = req;
+      const options = {
+        dateRange: req.query.dateRange || '30',
+        projectId: req.query.projectId ? parseInt(req.query.projectId) : null
+      };
+
+      const [
+        dashboardOverview,
+        teamProductivity,
+        timeAnalytics
+      ] = await Promise.all([
+        dashboardService.getDashboardOverview(user.id, user.role, options),
+        dashboardService.getTeamProductivity(user.id, user.role, options),
+        dashboardService.getTimeStatistics(
+          user.id, user.role, 
+          dashboardService.getDateFilter(options.dateRange), 
+          options.projectId
+        )
+      ]);
+
+      const analyticsSummary = {
+        overview: dashboardOverview,
+        productivity: teamProductivity,
+        timeTracking: timeAnalytics,
+        generatedAt: new Date().toISOString(),
+        dateRange: parseInt(options.dateRange)
+      };
+
+      res.status(200).json(formatApiResponse(analyticsSummary, 'Analytics summary retrieved successfully'));
+
+    } catch (error) {
+      console.error('Get analytics summary error:', error);
+      res.status(500).json(formatErrorResponse('Failed to retrieve analytics summary', error.message));
+    }
+  }
 }
 
 export default new DashboardController();

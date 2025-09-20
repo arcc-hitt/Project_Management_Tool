@@ -15,12 +15,16 @@ export const generateToken = (payload) => {
 };
 
 /**
- * Verify JWT token
+ * Verify JWT token (can handle both access and refresh tokens)
  * @param {string} token - JWT token
+ * @param {boolean} isRefreshToken - Whether this is a refresh token
  * @returns {object} Decoded token payload
  */
-export const verifyToken = (token) => {
-  return jwt.verify(token, config.jwt.secret);
+export const verifyToken = (token, isRefreshToken = false) => {
+  const secret = isRefreshToken ? 
+    (config.jwt.refreshSecret || config.jwt.secret) : 
+    config.jwt.secret;
+  return jwt.verify(token, secret);
 };
 
 /**
@@ -112,6 +116,17 @@ export const authorizeOwnerOrAdmin = (req, res, next) => {
   }
 
   next();
+};
+
+/**
+ * Generate refresh token
+ * @param {object} payload - Token payload
+ * @returns {string} Refresh JWT token
+ */
+export const generateRefreshToken = (payload) => {
+  return jwt.sign(payload, config.jwt.refreshSecret || config.jwt.secret, {
+    expiresIn: config.jwt.refreshExpiresIn || '7d',
+  });
 };
 
 /**

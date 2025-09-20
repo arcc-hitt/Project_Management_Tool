@@ -16,7 +16,10 @@ import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
 import projectRoutes from './routes/projects.js';
 import taskRoutes from './routes/tasks.js';
+import commentRoutes from './routes/comments.js';
+import activityRoutes from './routes/activities.js';
 import dashboardRoutes from './routes/dashboard.js';
+import searchRoutes from './routes/search.js';
 // import aiRoutes from './routes/ai.js';
 
 const app = express();
@@ -82,7 +85,10 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/tasks', taskRoutes);
+app.use('/api/comments', commentRoutes);
+app.use('/api/activities', activityRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/search', searchRoutes);
 // app.use('/api/ai', aiRoutes);
 
 // Default route

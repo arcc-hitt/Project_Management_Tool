@@ -5,7 +5,13 @@ import {
   getCurrentUser, 
   updatePassword, 
   logout, 
-  verifyToken 
+  verifyToken,
+  refreshToken,
+  requestPasswordReset,
+  resetPassword,
+  sendEmailVerification,
+  verifyEmail,
+  updateProfile
 } from '../controllers/authController.js';
 import { 
   authenticate 
@@ -43,11 +49,17 @@ const validatePasswordUpdate = [
 // Public routes (no authentication required)
 router.post('/register', authLimiter, validateUserRegistration, register);
 router.post('/login', authLimiter, validateUserLogin, login);
+router.post('/refresh', authLimiter, refreshToken);
+router.post('/request-password-reset', authLimiter, requestPasswordReset);
+router.post('/reset-password', authLimiter, resetPassword);
+router.post('/verify-email', verifyEmail);
 
 // Protected routes (authentication required)
 router.get('/me', authenticate, getCurrentUser);
 router.put('/update-password', authenticate, validatePasswordUpdate, updatePassword);
 router.post('/logout', authenticate, logout);
 router.get('/verify', authenticate, verifyToken);
+router.post('/send-verification', authenticate, sendEmailVerification);
+router.put('/update-profile', authenticate, updateProfile);
 
 export default router;

@@ -301,6 +301,112 @@ class User {
     return `${this.firstName} ${this.lastName}`.trim();
   }
 
+  // Password reset token methods
+  static async setPasswordResetToken(userId, resetToken, resetTokenExpiry) {
+    try {
+      const query = `
+        UPDATE users 
+        SET passwordResetToken = ?, passwordResetExpiry = ?, updatedAt = NOW()
+        WHERE id = ?
+      `;
+      
+      await database.query(query, [resetToken, resetTokenExpiry, userId]);
+      return true;
+    } catch (error) {
+      throw new Error(`Error setting password reset token: ${error.message}`);
+    }
+  }
+
+  static async findByPasswordResetToken(resetToken) {
+    try {
+      const query = `
+        SELECT id, firstName, lastName, email, role, avatar, lastLoginAt, isActive, 
+               createdAt, updatedAt, passwordResetToken, passwordResetExpiry
+        FROM users 
+        WHERE passwordResetToken = ? AND passwordResetExpiry > NOW() AND isActive = true
+      `;
+      
+      const [rows] = await database.query(query, [resetToken]);
+      
+      if (rows.length === 0) {
+        return null;
+      }
+      
+      return new User(rows[0]);
+    } catch (error) {
+      throw new Error(`Error finding user by password reset token: ${error.message}`);
+    }
+  }
+
+  static async resetPasswordWithToken(userId, newPassword) {
+    try {
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      
+      const query = `
+        UPDATE users 
+        SET password = ?, passwordResetToken = NULL, passwordResetExpiry = NULL, updatedAt = NOW()
+        WHERE id = ?
+      `;
+      
+      await database.query(query, [hashedPassword, userId]);
+      return true;
+    } catch (error) {
+      throw new Error(`Error resetting password: ${error.message}`);
+    }
+  }
+
+  // Email verification methods
+  static async setEmailVerificationToken(userId, verificationToken, verificationExpiry) {
+    try {
+      const query = `
+        UPDATE users 
+        SET emailVerificationToken = ?, emailVerificationExpiry = ?, updatedAt = NOW()
+        WHERE id = ?
+      `;
+      
+      await database.query(query, [verificationToken, verificationExpiry, userId]);
+      return true;
+    } catch (error) {
+      throw new Error(`Error setting email verification token: ${error.message}`);
+    }
+  }
+
+  static async findByEmailVerificationToken(verificationToken) {
+    try {
+      const query = `
+        SELECT id, firstName, lastName, email, role, avatar, lastLoginAt, isActive, 
+               createdAt, updatedAt, emailVerified, emailVerificationToken, emailVerificationExpiry
+        FROM users 
+        WHERE emailVerificationToken = ? AND emailVerificationExpiry > NOW() AND isActive = true
+      `;
+      
+      const [rows] = await database.query(query, [verificationToken]);
+      
+      if (rows.length === 0) {
+        return null;
+      }
+      
+      return new User(rows[0]);
+    } catch (error) {
+      throw new Error(`Error finding user by email verification token: ${error.message}`);
+    }
+  }
+
+  static async verifyEmailWithToken(userId) {
+    try {
+      const query = `
+        UPDATE users 
+        SET emailVerified = true, emailVerificationToken = NULL, emailVerificationExpiry = NULL, updatedAt = NOW()
+        WHERE id = ?
+      `;
+      
+      await database.query(query, [userId]);
+      return true;
+    } catch (error) {
+      throw new Error(`Error verifying email: ${error.message}`);
+    }
+  }
+
   // Validation methods
   static validateCreate(data) {
     const errors = [];

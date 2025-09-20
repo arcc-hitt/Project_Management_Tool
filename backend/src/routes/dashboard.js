@@ -561,4 +561,167 @@ router.get('/export',
   dashboardController.exportDashboardData
 );
 
+/**
+ * @swagger
+ * /api/dashboard/time-analytics:
+ *   get:
+ *     summary: Get time tracking analytics
+ *     tags: [Dashboard]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: dateRange
+ *         schema:
+ *           type: string
+ *           default: "30"
+ *         description: Date range in days
+ *       - in: query
+ *         name: projectId
+ *         schema:
+ *           type: integer
+ *         description: Filter by specific project
+ *     responses:
+ *       200:
+ *         description: Time analytics retrieved successfully
+ *       401:
+ *         description: Authentication required
+ */
+router.get('/time-analytics', 
+  authenticateToken, 
+  dashboardQueryValidation, 
+  dashboardController.getTimeAnalytics
+);
+
+/**
+ * @swagger
+ * /api/dashboard/project-analytics/{projectId}:
+ *   get:
+ *     summary: Get detailed project analytics
+ *     tags: [Dashboard]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Project ID
+ *       - in: query
+ *         name: dateRange
+ *         schema:
+ *           type: string
+ *           default: "30"
+ *         description: Date range in days
+ *     responses:
+ *       200:
+ *         description: Project analytics retrieved successfully
+ *       404:
+ *         description: Project not found or access denied
+ *       401:
+ *         description: Authentication required
+ */
+router.get('/project-analytics/:projectId', 
+  authenticateToken, 
+  dashboardQueryValidation, 
+  dashboardController.getProjectAnalytics
+);
+
+/**
+ * @swagger
+ * /api/dashboard/team-productivity:
+ *   get:
+ *     summary: Get team productivity metrics
+ *     tags: [Dashboard]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: dateRange
+ *         schema:
+ *           type: string
+ *           default: "30"
+ *         description: Date range in days
+ *       - in: query
+ *         name: projectId
+ *         schema:
+ *           type: integer
+ *         description: Filter by specific project
+ *     responses:
+ *       200:
+ *         description: Team productivity retrieved successfully
+ *       401:
+ *         description: Authentication required
+ */
+router.get('/team-productivity', 
+  authenticateToken, 
+  dashboardQueryValidation, 
+  dashboardController.getTeamProductivity
+);
+
+/**
+ * @swagger
+ * /api/dashboard/time-distribution:
+ *   get:
+ *     summary: Get time distribution analytics
+ *     tags: [Dashboard]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: dateRange
+ *         schema:
+ *           type: string
+ *           default: "30"
+ *         description: Date range in days
+ *       - in: query
+ *         name: projectId
+ *         schema:
+ *           type: integer
+ *         description: Filter by specific project
+ *     responses:
+ *       200:
+ *         description: Time distribution retrieved successfully
+ *       401:
+ *         description: Authentication required
+ */
+router.get('/time-distribution', 
+  authenticateToken, 
+  dashboardQueryValidation, 
+  dashboardController.getTimeDistribution
+);
+
+/**
+ * @swagger
+ * /api/dashboard/analytics-summary:
+ *   get:
+ *     summary: Get comprehensive analytics summary
+ *     tags: [Dashboard]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: dateRange
+ *         schema:
+ *           type: string
+ *           default: "30"
+ *         description: Date range in days
+ *       - in: query
+ *         name: projectId
+ *         schema:
+ *           type: integer
+ *         description: Filter by specific project
+ *     responses:
+ *       200:
+ *         description: Analytics summary retrieved successfully
+ *       401:
+ *         description: Authentication required
+ */
+router.get('/analytics-summary', 
+  authenticateToken, 
+  dashboardQueryValidation, 
+  dashboardController.getAnalyticsSummary
+);
+
 export default router;

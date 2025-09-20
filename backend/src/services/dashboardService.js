@@ -1,4 +1,4 @@
-import { Project, Task, User, Comment, Notification } from '../models/index.js';
+import { Project, Task, User, Comment, Notification, TimeEntry, ActivityLog } from '../models/index.js';
 import { snakeToCamel, formatDateForDB } from '../utils/helpers.js';
 
 class DashboardService {
@@ -19,27 +19,33 @@ class DashboardService {
         projectStats,
         taskStats,
         userStats,
+        timeStats,
         recentActivities,
         taskDistribution,
-        projectProgress
+        projectProgress,
+        timeDistribution
       ] = await Promise.all([
         this.getProjectStatistics(userId, userRole, dateFilter, projectId),
         this.getTaskStatistics(userId, userRole, dateFilter, projectId),
         this.getUserStatistics(userId, userRole, dateFilter, projectId),
+        this.getTimeStatistics(userId, userRole, dateFilter, projectId),
         this.getRecentActivities(userId, userRole, projectId),
         this.getTaskDistribution(userId, userRole, projectId),
-        this.getProjectProgress(userId, userRole, projectId)
+        this.getProjectProgress(userId, userRole, projectId),
+        this.getTimeDistribution(userId, userRole, dateFilter, projectId)
       ]);
 
       return {
         overview: {
           projects: projectStats,
           tasks: taskStats,
-          users: userStats
+          users: userStats,
+          timeTracking: timeStats
         },
         charts: {
           taskDistribution,
-          projectProgress
+          projectProgress,
+          timeDistribution
         },
         recentActivities,
         dateRange: parseInt(dateRange)
@@ -751,6 +757,310 @@ class DashboardService {
       });
       return userProjects;
     }
+  }
+
+  /**
+   * Get time tracking statistics
+   */
+  async getTimeStatistics(userId, userRole, dateFilter, projectId) {
+    try {
+      const filters = {
+        ...dateFilter,
+        ...(projectId && { projectId })
+      };
+
+      // Role-based filtering for time entries
+      if (userRole !== 'admin' && userRole !== 'manager') {
+        // Developers can only see their own time entries
+        filters.userId = userId;
+      }
+
+      const [totalHours, timeEntries, activeTimer] = await Promise.all([
+        TimeEntry.getTotalHours(filters),
+        TimeEntry.findAll({ ...filters, limit: 10 }),
+        userRole !== 'admin' && userRole !== 'manager' ? 
+          TimeEntry.getActiveTimer(userId) : null
+      ]);
+
+      // Calculate productivity metrics
+      const totalDays = this.getDaysInDateRange(dateFilter);
+      const avgHoursPerDay = totalDays > 0 ? (totalHours.totalHours / totalDays) : 0;
+
+      return {
+        totalHours: totalHours.totalHours,
+        billableHours: totalHours.billableHours,
+        totalEntries: totalHours.totalEntries,
+        avgHoursPerDay: Math.round(avgHoursPerDay * 100) / 100,
+        billablePercentage: totalHours.totalHours > 0 ? 
+          Math.round((totalHours.billableHours / totalHours.totalHours) * 100) : 0,
+        activeTimer: activeTimer,
+        recentEntries: timeEntries.slice(0, 5)
+      };
+
+    } catch (error) {
+      throw new Error(`Error getting time statistics: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get time distribution analytics
+   */
+  async getTimeDistribution(userId, userRole, dateFilter, projectId) {
+    try {
+      const filters = {
+        ...dateFilter,
+        ...(projectId && { projectId })
+      };
+
+      // Role-based filtering
+      if (userRole !== 'admin' && userRole !== 'manager') {
+        filters.userId = userId;
+      }
+
+      const [
+        projectTimeReport,
+        userTimeReport,
+        dailyTimeReport
+      ] = await Promise.all([
+        TimeEntry.getTimeReport({ ...filters, groupBy: 'project' }),
+        TimeEntry.getTimeReport({ ...filters, groupBy: 'user' }),
+        TimeEntry.getTimeReport({ ...filters, groupBy: 'date' })
+      ]);
+
+      return {
+        byProject: projectTimeReport.map(entry => ({
+          projectId: entry.projectId,
+          projectName: entry.projectName,
+          totalHours: entry.totalHours,
+          billableHours: entry.billableHours,
+          entryCount: entry.entryCount
+        })),
+        byUser: userTimeReport.map(entry => ({
+          userId: entry.userId,
+          userName: entry.userName,
+          totalHours: entry.totalHours,
+          billableHours: entry.billableHours,
+          entryCount: entry.entryCount
+        })),
+        byDate: dailyTimeReport.map(entry => ({
+          date: entry.workDate,
+          totalHours: entry.totalHours,
+          billableHours: entry.billableHours,
+          entryCount: entry.entryCount
+        })).slice(0, 30) // Last 30 days
+      };
+
+    } catch (error) {
+      throw new Error(`Error getting time distribution: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get team productivity analytics
+   */
+  async getTeamProductivity(userId, userRole, options = {}) {
+    try {
+      const { dateRange = '30', projectId } = options;
+      const dateFilter = this.getDateFilter(dateRange);
+
+      const filters = {
+        ...dateFilter,
+        ...(projectId && { projectId })
+      };
+
+      const [
+        teamTimeStats,
+        teamTaskStats,
+        teamActivityStats
+      ] = await Promise.all([
+        this.getTeamTimeAnalytics(filters),
+        this.getTeamTaskAnalytics(filters),
+        this.getTeamActivityAnalytics(filters)
+      ]);
+
+      return {
+        timeAnalytics: teamTimeStats,
+        taskAnalytics: teamTaskStats,
+        activityAnalytics: teamActivityStats,
+        dateRange: parseInt(dateRange)
+      };
+
+    } catch (error) {
+      throw new Error(`Error getting team productivity: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get detailed project analytics
+   */
+  async getProjectAnalytics(projectId, userId, userRole, options = {}) {
+    try {
+      const { dateRange = '30' } = options;
+      const dateFilter = this.getDateFilter(dateRange);
+
+      // Check project access
+      const project = await Project.findById(projectId);
+      if (!project) {
+        throw new Error('Project not found');
+      }
+
+      // Role-based access check
+      if (userRole !== 'admin' && userRole !== 'manager') {
+        const userProjects = await this.getUserAccessibleProjects(userId, userRole, projectId);
+        if (userProjects.length === 0) {
+          throw new Error('Access denied to this project');
+        }
+      }
+
+      const [
+        projectOverview,
+        taskAnalytics,
+        timeAnalytics,
+        teamPerformance,
+        milestones
+      ] = await Promise.all([
+        this.getProjectOverview(projectId, dateFilter),
+        this.getProjectTaskAnalytics(projectId, dateFilter),
+        this.getProjectTimeAnalytics(projectId, dateFilter),
+        this.getProjectTeamPerformance(projectId, dateFilter),
+        this.getProjectMilestones(projectId)
+      ]);
+
+      return {
+        project: projectOverview,
+        analytics: {
+          tasks: taskAnalytics,
+          time: timeAnalytics,
+          team: teamPerformance
+        },
+        milestones,
+        dateRange: parseInt(dateRange)
+      };
+
+    } catch (error) {
+      throw new Error(`Error getting project analytics: ${error.message}`);
+    }
+  }
+
+  /**
+   * Helper method to get days in date range
+   */
+  getDaysInDateRange(dateFilter) {
+    if (dateFilter.createdAt && dateFilter.createdAt.$gte) {
+      const startDate = new Date(dateFilter.createdAt.$gte);
+      const endDate = new Date();
+      const timeDiff = endDate.getTime() - startDate.getTime();
+      return Math.ceil(timeDiff / (1000 * 3600 * 24));
+    }
+    return 30; // Default fallback
+  }
+
+  /**
+   * Get team time analytics
+   */
+  async getTeamTimeAnalytics(filters) {
+    try {
+      const timeReport = await TimeEntry.getTimeReport({ ...filters, groupBy: 'user' });
+      
+      return {
+        topPerformers: timeReport
+          .sort((a, b) => b.totalHours - a.totalHours)
+          .slice(0, 5),
+        totalTeamHours: timeReport.reduce((sum, user) => sum + user.totalHours, 0),
+        avgHoursPerUser: timeReport.length > 0 ? 
+          timeReport.reduce((sum, user) => sum + user.totalHours, 0) / timeReport.length : 0,
+        utilizationRate: this.calculateUtilizationRate(timeReport)
+      };
+
+    } catch (error) {
+      throw new Error(`Error getting team time analytics: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get team task analytics
+   */
+  async getTeamTaskAnalytics(filters) {
+    try {
+      // This would require enhancement to Task model for analytics
+      // For now, return basic structure
+      return {
+        completionRate: 0,
+        avgTasksPerUser: 0,
+        overdueTasks: 0,
+        taskVelocity: []
+      };
+
+    } catch (error) {
+      throw new Error(`Error getting team task analytics: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get team activity analytics
+   */
+  async getTeamActivityAnalytics(filters) {
+    try {
+      const activities = await ActivityLog.findAll({
+        ...filters,
+        limit: 100
+      });
+
+      const activityByUser = activities.reduce((acc, activity) => {
+        if (!acc[activity.userId]) {
+          acc[activity.userId] = {
+            userId: activity.userId,
+            userName: activity.userName,
+            activities: 0
+          };
+        }
+        acc[activity.userId].activities++;
+        return acc;
+      }, {});
+
+      return {
+        totalActivities: activities.length,
+        mostActiveUsers: Object.values(activityByUser)
+          .sort((a, b) => b.activities - a.activities)
+          .slice(0, 5),
+        activityTrend: this.calculateActivityTrend(activities)
+      };
+
+    } catch (error) {
+      throw new Error(`Error getting team activity analytics: ${error.message}`);
+    }
+  }
+
+  /**
+   * Calculate utilization rate
+   */
+  calculateUtilizationRate(timeReport) {
+    if (timeReport.length === 0) return 0;
+    
+    const standardWorkHours = 8; // 8 hours per day
+    const workDaysInPeriod = 22; // Roughly 22 work days per month
+    const expectedHours = timeReport.length * standardWorkHours * workDaysInPeriod;
+    const actualHours = timeReport.reduce((sum, user) => sum + user.totalHours, 0);
+    
+    return expectedHours > 0 ? Math.round((actualHours / expectedHours) * 100) : 0;
+  }
+
+  /**
+   * Calculate activity trend
+   */
+  calculateActivityTrend(activities) {
+    const last7Days = activities.filter(activity => {
+      const activityDate = new Date(activity.createdAt);
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      return activityDate >= weekAgo;
+    });
+
+    return {
+      total: activities.length,
+      lastWeek: last7Days.length,
+      trend: last7Days.length > (activities.length - last7Days.length) ? 'up' : 'down'
+    };
   }
 }
 
