@@ -8,6 +8,8 @@ import Comment from './Comment.js';
 import Notification from './Notification.js';
 import ActivityLog from './ActivityLog.js';
 import TimeEntry from './TimeEntry.js';
+import ProjectMember from './ProjectMember.js';
+import TaskAssignment from './TaskAssignment.js';
 
 export {
   User,
@@ -16,7 +18,9 @@ export {
   Comment,
   Notification,
   ActivityLog,
-  TimeEntry
+  TimeEntry,
+  ProjectMember,
+  TaskAssignment
 };
 
 export default {
@@ -26,5 +30,7 @@ export default {
   Comment,
   Notification,
   ActivityLog,
-  TimeEntry
+  TimeEntry,
+  ProjectMember,
+  TaskAssignment
 };
