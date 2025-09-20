@@ -1,53 +1,74 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { useAuth } from '../../contexts/AuthContext';
+import { useFormValidation, commonValidations } from '../../hooks/useFormValidation';
 
 const RegisterPage: React.FC = () => {
   const [formData, setFormData] = useState({
-    name: '',
+    firstName: '',
+    lastName: '',
     email: '',
     password: '',
     confirmPassword: '',
     role: 'developer' as 'admin' | 'manager' | 'developer'
   });
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
 
   const { register } = useAuth();
+  const navigate = useNavigate();
+
+  const { errors, validateForm } = useFormValidation({
+    firstName: commonValidations.firstName,
+    lastName: commonValidations.lastName,
+    email: commonValidations.email,
+    password: commonValidations.password,
+    confirmPassword: commonValidations.confirmPassword(formData.password)
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    setError('');
-
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      setIsLoading(false);
+    
+    if (!validateForm(formData)) {
+      toast.error('Please fix the validation errors');
       return;
     }
 
+    setIsLoading(true);
+
     try {
       await register({
-        name: formData.name,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
         email: formData.email,
         password: formData.password,
         role: formData.role
       });
+      toast.success('Account created successfully! Welcome to ProjectFlow.');
+      navigate('/dashboard');
     } catch (err: any) {
-      setError(err.message || 'Registration failed');
+      toast.error(err.message || 'Registration failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({
       ...prev,
       [e.target.name]: e.target.value
+    }));
+  };
+
+  const handleRoleChange = (value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      role: value as 'admin' | 'manager' | 'developer'
     }));
   };
 
@@ -62,24 +83,40 @@ const RegisterPage: React.FC = () => {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <div className="p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md">
-                {error}
-              </div>
-            )}
-            
             <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
+              <Label htmlFor="firstName">First Name</Label>
               <Input
-                id="name"
-                name="name"
+                id="firstName"
+                name="firstName"
                 type="text"
-                placeholder="John Doe"
-                value={formData.name}
+                placeholder="John"
+                value={formData.firstName}
                 onChange={handleChange}
                 required
                 disabled={isLoading}
+                className={errors.firstName ? "border-destructive" : ""}
               />
+              {errors.firstName && (
+                <p className="text-sm text-destructive">{errors.firstName}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="lastName">Last Name</Label>
+              <Input
+                id="lastName"
+                name="lastName"
+                type="text"
+                placeholder="Doe"
+                value={formData.lastName}
+                onChange={handleChange}
+                required
+                disabled={isLoading}
+                className={errors.lastName ? "border-destructive" : ""}
+              />
+              {errors.lastName && (
+                <p className="text-sm text-destructive">{errors.lastName}</p>
+              )}
             </div>
             
             <div className="space-y-2">
@@ -98,18 +135,16 @@ const RegisterPage: React.FC = () => {
             
             <div className="space-y-2">
               <Label htmlFor="role">Role</Label>
-              <select
-                id="role"
-                name="role"
-                value={formData.role}
-                onChange={handleChange}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={isLoading}
-              >
-                <option value="developer">Developer</option>
-                <option value="manager">Manager</option>
-                <option value="admin">Admin</option>
-              </select>
+              <Select value={formData.role} onValueChange={handleRoleChange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="developer">Developer</SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             
             <div className="space-y-2">
