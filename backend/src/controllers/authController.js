@@ -334,3 +334,260 @@ export const verifyToken = asyncHandler(async (req, res) => {
     }
   });
 });
+
+/**
+ * @swagger
+ * /api/auth/refresh:
+ *   post:
+ *     summary: Refresh access token
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - refreshToken
+ *             properties:
+ *               refreshToken:
+ *                 type: string
+ *                 description: Refresh token
+ *     responses:
+ *       200:
+ *         description: Token refreshed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     accessToken:
+ *                       type: string
+ *       400:
+ *         description: Refresh token is required
+ *       401:
+ *         description: Invalid refresh token
+ */
+export const refreshToken = asyncHandler(async (req, res) => {
+  const { refreshToken } = req.body;
+
+  if (!refreshToken) {
+    return sendError(res, 'Refresh token is required', 400);
+  }
+
+  try {
+    const result = await authService.refreshToken(refreshToken);
+    return sendSuccess(res, 'Token refreshed successfully', result);
+  } catch (error) {
+    return sendError(res, error.message, 401);
+  }
+});
+
+/**
+ * @swagger
+ * /api/auth/request-password-reset:
+ *   post:
+ *     summary: Request password reset
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: User email
+ *     responses:
+ *       200:
+ *         description: Password reset instructions sent
+ *       400:
+ *         description: Email is required
+ */
+export const requestPasswordReset = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return sendError(res, 'Email is required', 400);
+  }
+
+  try {
+    const resetToken = await authService.requestPasswordReset(email);
+    // In production, you would send this token via email
+    // For development, we'll return it in the response
+    return sendSuccess(res, 'Password reset instructions sent', { resetToken });
+  } catch (error) {
+    return sendError(res, error.message, 400);
+  }
+});
+
+/**
+ * @swagger
+ * /api/auth/reset-password:
+ *   post:
+ *     summary: Reset password with token
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - resetToken
+ *               - newPassword
+ *             properties:
+ *               resetToken:
+ *                 type: string
+ *                 description: Password reset token
+ *               newPassword:
+ *                 type: string
+ *                 minLength: 6
+ *                 description: New password (minimum 6 characters)
+ *     responses:
+ *       200:
+ *         description: Password reset successfully
+ *       400:
+ *         description: Reset token and new password are required
+ *       401:
+ *         description: Invalid or expired reset token
+ */
+export const resetPassword = asyncHandler(async (req, res) => {
+  const { resetToken, newPassword } = req.body;
+
+  if (!resetToken || !newPassword) {
+    return sendError(res, 'Reset token and new password are required', 400);
+  }
+
+  if (newPassword.length < 6) {
+    return sendError(res, 'Password must be at least 6 characters long', 400);
+  }
+
+  try {
+    await authService.resetPassword(resetToken, newPassword);
+    return sendSuccess(res, 'Password reset successfully');
+  } catch (error) {
+    return sendError(res, error.message, 401);
+  }
+});
+
+/**
+ * @swagger
+ * /api/auth/send-verification:
+ *   post:
+ *     summary: Send email verification
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Verification email sent
+ *       401:
+ *         description: Authentication required
+ *       400:
+ *         description: Email already verified
+ */
+export const sendEmailVerification = asyncHandler(async (req, res) => {
+  try {
+    const verificationToken = await authService.sendEmailVerification(req.user.id);
+    // In production, you would send this token via email
+    // For development, we'll return it in the response
+    return sendSuccess(res, 'Verification email sent', { verificationToken });
+  } catch (error) {
+    return sendError(res, error.message, 400);
+  }
+});
+
+/**
+ * @swagger
+ * /api/auth/verify-email:
+ *   post:
+ *     summary: Verify email address
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - verificationToken
+ *             properties:
+ *               verificationToken:
+ *                 type: string
+ *                 description: Email verification token
+ *     responses:
+ *       200:
+ *         description: Email verified successfully
+ *       400:
+ *         description: Verification token is required
+ *       401:
+ *         description: Invalid or expired verification token
+ */
+export const verifyEmail = asyncHandler(async (req, res) => {
+  const { verificationToken } = req.body;
+
+  if (!verificationToken) {
+    return sendError(res, 'Verification token is required', 400);
+  }
+
+  try {
+    await authService.verifyEmail(verificationToken);
+    return sendSuccess(res, 'Email verified successfully');
+  } catch (error) {
+    return sendError(res, error.message, 401);
+  }
+});
+
+/**
+ * @swagger
+ * /api/auth/update-profile:
+ *   put:
+ *     summary: Update user profile
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               firstName:
+ *                 type: string
+ *               lastName:
+ *                 type: string
+ *               phone:
+ *                 type: string
+ *               timezone:
+ *                 type: string
+ *               avatarUrl:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Profile updated successfully
+ *       401:
+ *         description: Authentication required
+ *       400:
+ *         description: Invalid profile data
+ */
+export const updateProfile = asyncHandler(async (req, res) => {
+  try {
+    const updatedUser = await authService.updateProfile(req.user.id, req.body);
+    return sendSuccess(res, 'Profile updated successfully', { user: updatedUser });
+  } catch (error) {
+    return sendError(res, error.message, 400);
+  }
+});

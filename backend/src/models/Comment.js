@@ -429,6 +429,15 @@ class Comment {
     return errors;
   }
 
+  // Alias methods for backward compatibility
+  static async findByTaskId(taskId, options = {}) {
+    return await Comment.findByTask(taskId, options);
+  }
+
+  static async countByTaskId(taskId) {
+    return await Comment.count({ taskId });
+  }
+
   static validateUpdate(data) {
     const errors = [];
 

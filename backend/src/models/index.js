@@ -6,13 +6,17 @@ import Project from './Project.js';
 import Task from './Task.js';
 import Comment from './Comment.js';
 import Notification from './Notification.js';
+import ActivityLog from './ActivityLog.js';
+import TimeEntry from './TimeEntry.js';
 
 export {
   User,
   Project,
   Task,
   Comment,
-  Notification
+  Notification,
+  ActivityLog,
+  TimeEntry
 };
 
 export default {
@@ -20,5 +24,7 @@ export default {
   Project,
   Task,
   Comment,
-  Notification
+  Notification,
+  ActivityLog,
+  TimeEntry
 };
