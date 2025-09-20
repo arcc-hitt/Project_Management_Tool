@@ -1,4 +1,4 @@
-import database from '../config/database.js';
+import { Project, User } from '../models/index.js';
 import { 
   snakeToCamel, 
   camelToSnake,
@@ -25,69 +25,45 @@ class ProjectService {
     } = options;
 
     try {
-      // Build WHERE clause based on user role
-      let whereClause = 'WHERE 1=1';
-      let queryParams = [];
+      // Build filters object
+      const filters = {};
+      if (status) filters.status = status;
+      if (priority) filters.priority = priority;
+      if (search) filters.search = search;
 
+      let projects;
+      
       // Role-based filtering
       if (userRole === 'developer') {
-        // Developers can only see projects they are assigned to
-        whereClause += ' AND p.id IN (SELECT project_id FROM project_members WHERE user_id = ?)';
-        queryParams.push(userId);
+        // Get projects where user is a member
+        const userProjects = await Project.findByMemberId(userId);
+        projects = userProjects;
+      } else {
+        // Admin and managers can see all projects
+        projects = await Project.findAll(filters);
       }
 
-      if (status) {
-        whereClause += ' AND p.status = ?';
-        queryParams.push(status);
-      }
+      // Apply pagination and sorting
+      const startIndex = (page - 1) * limit;
+      const endIndex = startIndex + limit;
+      
+      // Sort projects
+      projects.sort((a, b) => {
+        const aValue = a[sortBy];
+        const bValue = b[sortBy];
+        
+        if (sortOrder.toUpperCase() === 'ASC') {
+          return aValue > bValue ? 1 : -1;
+        } else {
+          return aValue < bValue ? 1 : -1;
+        }
+      });
 
-      if (priority) {
-        whereClause += ' AND p.priority = ?';
-        queryParams.push(priority);
-      }
-
-      if (search) {
-        whereClause += ' AND (p.name LIKE ? OR p.description LIKE ?)';
-        const searchTerm = `%${search}%`;
-        queryParams.push(searchTerm, searchTerm);
-      }
-
-      // Validate sort column
-      const allowedSortColumns = ['id', 'name', 'status', 'priority', 'start_date', 'end_date', 'created_at'];
-      const sortColumn = allowedSortColumns.includes(sortBy) ? sortBy : 'created_at';
-      const sortDirection = sortOrder.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
-
-      // Get total count
-      const countQuery = `
-        SELECT COUNT(DISTINCT p.id) as total 
-        FROM projects p
-        ${userRole === 'developer' ? 'LEFT JOIN project_members pm ON p.id = pm.project_id' : ''}
-        ${whereClause}
-      `;
-      const [countResult] = await database.query(countQuery, queryParams);
-      const totalProjects = countResult.total;
-
-      // Get paginated projects with creator info
-      const { limit: sqlLimit, offset } = getPaginationSQL(page, limit);
-      const projectsQuery = `
-        SELECT DISTINCT p.id, p.name, p.description, p.status, p.priority, 
-               p.start_date, p.end_date, p.created_by, p.created_at, p.updated_at,
-               u.first_name as creator_first_name, u.last_name as creator_last_name,
-               (SELECT COUNT(*) FROM project_members WHERE project_id = p.id) as member_count,
-               (SELECT COUNT(*) FROM tasks WHERE project_id = p.id) as task_count,
-               (SELECT COUNT(*) FROM tasks WHERE project_id = p.id AND status = 'done') as completed_tasks
-        FROM projects p
-        LEFT JOIN users u ON p.created_by = u.id
-        ${userRole === 'developer' ? 'LEFT JOIN project_members pm ON p.id = pm.project_id' : ''}
-        ${whereClause}
-        ORDER BY p.${sortColumn} ${sortDirection}
-        LIMIT ? OFFSET ?
-      `;
-
-      const projects = await database.query(projectsQuery, [...queryParams, sqlLimit, offset]);
+      const paginatedProjects = projects.slice(startIndex, endIndex);
+      const totalProjects = projects.length;
 
       return {
-        projects: projects.map(project => snakeToCamel(project)),
+        projects: paginatedProjects,
         pagination: {
           totalItems: totalProjects,
           totalPages: Math.ceil(totalProjects / limit),
@@ -112,62 +88,27 @@ class ProjectService {
    */
   async getProjectById(projectId, userId, userRole) {
     try {
+      // Get project using model
+      const project = await Project.findById(projectId);
+      if (!project) {
+        return null;
+      }
+
       // Check if user has access to this project
       if (userRole === 'developer') {
-        const accessCheck = await database.query(
-          'SELECT 1 FROM project_members WHERE project_id = ? AND user_id = ?',
-          [projectId, userId]
-        );
-        if (accessCheck.length === 0) {
+        const hasAccess = await Project.isMember(projectId, userId);
+        if (!hasAccess) {
           throw new Error('Access denied to this project');
         }
       }
 
-      // Get project details
-      const projectQuery = `
-        SELECT p.id, p.name, p.description, p.status, p.priority, 
-               p.start_date, p.end_date, p.created_by, p.created_at, p.updated_at,
-               u.first_name as creator_first_name, u.last_name as creator_last_name,
-               u.email as creator_email
-        FROM projects p
-        LEFT JOIN users u ON p.created_by = u.id
-        WHERE p.id = ?
-      `;
-      
-      const projects = await database.query(projectQuery, [projectId]);
-      if (projects.length === 0) {
-        return null;
-      }
+      // Get team members using model
+      const teamMembers = await Project.getMembers(projectId);
+      project.teamMembers = teamMembers;
 
-      const project = snakeToCamel(projects[0]);
-
-      // Get team members
-      const membersQuery = `
-        SELECT pm.user_id, pm.role, pm.joined_at,
-               u.first_name, u.last_name, u.email, u.avatar_url
-        FROM project_members pm
-        LEFT JOIN users u ON pm.user_id = u.id
-        WHERE pm.project_id = ? AND u.is_active = TRUE
-        ORDER BY pm.joined_at ASC
-      `;
-
-      const members = await database.query(membersQuery, [projectId]);
-      project.teamMembers = members.map(member => snakeToCamel(member));
-
-      // Get project statistics
-      const statsQuery = `
-        SELECT 
-          COUNT(t.id) as total_tasks,
-          SUM(CASE WHEN t.status = 'done' THEN 1 ELSE 0 END) as completed_tasks,
-          SUM(CASE WHEN t.status = 'in_progress' THEN 1 ELSE 0 END) as in_progress_tasks,
-          SUM(CASE WHEN t.status = 'todo' THEN 1 ELSE 0 END) as pending_tasks,
-          SUM(CASE WHEN t.due_date < NOW() AND t.status != 'done' THEN 1 ELSE 0 END) as overdue_tasks
-        FROM tasks t
-        WHERE t.project_id = ?
-      `;
-
-      const [stats] = await database.query(statsQuery, [projectId]);
-      project.statistics = snakeToCamel(stats);
+      // Get project statistics using model
+      const statistics = await Project.getStatistics(projectId);
+      project.statistics = statistics;
 
       return project;
 
@@ -184,8 +125,8 @@ class ProjectService {
    */
   async createProject(projectData, createdBy) {
     const { 
-      name, 
-      description, 
+      name,
+      description,
       status = 'planning',
       priority = 'medium',
       startDate,
@@ -194,51 +135,34 @@ class ProjectService {
     } = projectData;
 
     try {
-      return await database.transaction(async (connection) => {
-        // Insert project
-        const insertQuery = `
-          INSERT INTO projects (name, description, status, priority, start_date, end_date, created_by)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-        `;
-        
-        const [result] = await connection.execute(insertQuery, [
-          name, 
-          description, 
-          status, 
-          priority,
-          formatDateForDB(startDate),
-          formatDateForDB(endDate),
-          createdBy
-        ]);
-
-        const projectId = result.insertId;
-
-        // Add creator as project manager
-        await connection.execute(
-          'INSERT INTO project_members (project_id, user_id, role) VALUES (?, ?, ?)',
-          [projectId, createdBy, 'manager']
-        );
-
-        // Add team members if provided
-        if (teamMembers.length > 0) {
-          for (const member of teamMembers) {
-            await connection.execute(
-              'INSERT INTO project_members (project_id, user_id, role) VALUES (?, ?, ?)',
-              [projectId, member.userId, member.role || 'developer']
-            );
-          }
-        }
-
-        // Return created project
-        return await this.getProjectById(projectId, createdBy, 'admin');
+      // Create project using model
+      const project = await Project.create({
+        name,
+        description,
+        status,
+        priority,
+        startDate,
+        endDate,
+        createdBy
       });
+
+      // Add creator as project manager
+      await Project.addMember(project.id, createdBy, 'manager');
+
+      // Add team members if provided
+      if (teamMembers.length > 0) {
+        for (const member of teamMembers) {
+          await Project.addMember(project.id, member.userId, member.role || 'developer');
+        }
+      }
+
+      // Return created project with full details
+      return await this.getProjectById(project.id, createdBy, 'admin');
 
     } catch (error) {
       throw error;
     }
-  }
-
-  /**
+  }  /**
    * Update project
    * @param {number} projectId - Project ID
    * @param {object} projectData - Updated project data
@@ -254,34 +178,8 @@ class ProjectService {
         throw new Error('Project not found or access denied');
       }
 
-      // Prepare update data
-      const allowedFields = ['name', 'description', 'status', 'priority', 'start_date', 'end_date'];
-      const updateData = {};
-      
-      Object.keys(projectData).forEach(key => {
-        const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-        if (allowedFields.includes(snakeKey)) {
-          if (key === 'startDate' || key === 'endDate') {
-            updateData[snakeKey] = formatDateForDB(projectData[key]);
-          } else {
-            updateData[snakeKey] = projectData[key];
-          }
-        }
-      });
-
-      if (Object.keys(updateData).length === 0) {
-        throw new Error('No valid fields to update');
-      }
-
-      // Build update query
-      const setClause = Object.keys(updateData).map(key => `${key} = ?`).join(', ');
-      const updateQuery = `
-        UPDATE projects 
-        SET ${setClause}, updated_at = CURRENT_TIMESTAMP 
-        WHERE id = ?
-      `;
-
-      await database.query(updateQuery, [...Object.values(updateData), projectId]);
+      // Update project using model
+      await Project.update(projectId, projectData);
 
       // Return updated project
       return await this.getProjectById(projectId, updatedBy, userRole);
@@ -311,8 +209,8 @@ class ProjectService {
         throw new Error('Only project creator or admin can delete this project');
       }
 
-      // Delete project (cascading deletes will handle related records)
-      await database.query('DELETE FROM projects WHERE id = ?', [projectId]);
+      // Delete project using model
+      await Project.delete(projectId);
 
       return true;
 
@@ -339,30 +237,19 @@ class ProjectService {
       }
 
       // Check if user is already a member
-      const existingMember = await database.query(
-        'SELECT 1 FROM project_members WHERE project_id = ? AND user_id = ?',
-        [projectId, userId]
-      );
-
-      if (existingMember.length > 0) {
+      const isAlreadyMember = await Project.isMember(projectId, userId);
+      if (isAlreadyMember) {
         throw new Error('User is already a member of this project');
       }
 
       // Verify user exists
-      const userExists = await database.query(
-        'SELECT 1 FROM users WHERE id = ? AND is_active = TRUE',
-        [userId]
-      );
-
-      if (userExists.length === 0) {
+      const user = await User.findById(userId);
+      if (!user) {
         throw new Error('User not found or inactive');
       }
 
-      // Add team member
-      await database.query(
-        'INSERT INTO project_members (project_id, user_id, role) VALUES (?, ?, ?)',
-        [projectId, userId, role]
-      );
+      // Add team member using model
+      await Project.addMember(projectId, userId, role);
 
       // Return updated project
       return await this.getProjectById(projectId, addedBy, addedByRole);
@@ -393,13 +280,9 @@ class ProjectService {
         throw new Error('Cannot remove project creator from team');
       }
 
-      // Remove team member
-      const result = await database.query(
-        'DELETE FROM project_members WHERE project_id = ? AND user_id = ?',
-        [projectId, userId]
-      );
-
-      if (result.affectedRows === 0) {
+      // Remove team member using model
+      const removed = await Project.removeMember(projectId, userId);
+      if (!removed) {
         throw new Error('User is not a member of this project');
       }
 
@@ -434,13 +317,9 @@ class ProjectService {
         throw new Error('Project not found or access denied');
       }
 
-      // Update member role
-      const result = await database.query(
-        'UPDATE project_members SET role = ? WHERE project_id = ? AND user_id = ?',
-        [newRole, projectId, userId]
-      );
-
-      if (result.affectedRows === 0) {
+      // Update member role using model
+      const updated = await Project.updateMemberRole(projectId, userId, newRole);
+      if (!updated) {
         throw new Error('User is not a member of this project');
       }
 
@@ -459,20 +338,8 @@ class ProjectService {
    */
   async getUserProjects(userId) {
     try {
-      const query = `
-        SELECT p.id, p.name, p.description, p.status, p.priority, 
-               p.start_date, p.end_date, p.created_at,
-               pm.role as user_role,
-               (SELECT COUNT(*) FROM tasks WHERE project_id = p.id) as task_count,
-               (SELECT COUNT(*) FROM tasks WHERE project_id = p.id AND status = 'done') as completed_tasks
-        FROM projects p
-        INNER JOIN project_members pm ON p.id = pm.project_id
-        WHERE pm.user_id = ?
-        ORDER BY p.updated_at DESC
-      `;
-
-      const projects = await database.query(query, [userId]);
-      return projects.map(project => snakeToCamel(project));
+      // Use model to get user's projects
+      return await Project.findByMemberId(userId);
 
     } catch (error) {
       throw error;

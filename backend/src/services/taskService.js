@@ -1,4 +1,4 @@
-import database from '../config/database.js';
+import { Task, Project, User, Comment } from '../models/index.js';
 import { 
   snakeToCamel, 
   camelToSnake,
@@ -30,97 +30,50 @@ class TaskService {
     } = options;
 
     try {
-      // Build WHERE clause based on user role and filters
-      let whereClause = 'WHERE 1=1';
-      let queryParams = [];
+      // Build filters object
+      const filters = {};
+      if (status) filters.status = status;
+      if (priority) filters.priority = priority;
+      if (projectId) filters.projectId = projectId;
+      if (assignedTo) filters.assignedTo = assignedTo;
+      if (search) filters.search = search;
+      if (overdue === 'true') filters.overdue = true;
 
+      let tasks;
+      
       // Role-based filtering
       if (userRole === 'developer') {
-        // Developers can only see tasks from projects they are assigned to or tasks assigned to them
-        whereClause += ` AND (t.project_id IN (
-          SELECT project_id FROM project_members WHERE user_id = ?
-        ) OR t.assigned_to = ?)`;
-        queryParams.push(userId, userId);
+        // Get tasks from user's projects or assigned to user
+        const userProjects = await Project.findByMemberId(userId);
+        const projectIds = userProjects.map(p => p.id);
+        
+        tasks = await Task.findByUserAccess(userId, projectIds, filters);
+      } else {
+        // Admin and managers can see all tasks
+        tasks = await Task.findAll(filters);
       }
 
-      if (projectId) {
-        whereClause += ' AND t.project_id = ?';
-        queryParams.push(projectId);
-      }
-
-      if (status) {
-        whereClause += ' AND t.status = ?';
-        queryParams.push(status);
-      }
-
-      if (priority) {
-        whereClause += ' AND t.priority = ?';
-        queryParams.push(priority);
-      }
-
-      if (assignedTo) {
-        whereClause += ' AND t.assigned_to = ?';
-        queryParams.push(assignedTo);
-      }
-
-      if (search) {
-        whereClause += ' AND (t.title LIKE ? OR t.description LIKE ?)';
-        const searchTerm = `%${search}%`;
-        queryParams.push(searchTerm, searchTerm);
-      }
-
-      if (overdue === 'true') {
-        whereClause += ' AND t.due_date < NOW() AND t.status != ?';
-        queryParams.push('done');
-      }
-
-      // Validate sort column
-      const allowedSortColumns = ['id', 'title', 'status', 'priority', 'due_date', 'created_at'];
-      const sortColumn = allowedSortColumns.includes(sortBy) ? sortBy : 'created_at';
-      const sortDirection = sortOrder.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
-
-      // Get total count
-      const countQuery = `
-        SELECT COUNT(DISTINCT t.id) as total 
-        FROM tasks t
-        LEFT JOIN projects p ON t.project_id = p.id
-        ${userRole === 'developer' ? 'LEFT JOIN project_members pm ON t.project_id = pm.project_id' : ''}
-        ${whereClause}
-      `;
-      const [countResult] = await database.query(countQuery, queryParams);
-      const totalTasks = countResult.total;
-
-      // Get paginated tasks with project and assignee info
-      const { limit: sqlLimit, offset } = getPaginationSQL(page, limit);
-      const tasksQuery = `
-        SELECT DISTINCT t.id, t.title, t.description, t.status, t.priority, 
-               t.due_date, t.estimated_hours, t.actual_hours, t.project_id, 
-               t.assigned_to, t.created_by, t.created_at, t.updated_at,
-               p.name as project_name,
-               u1.first_name as assignee_first_name, u1.last_name as assignee_last_name,
-               u2.first_name as creator_first_name, u2.last_name as creator_last_name,
-               (SELECT COUNT(*) FROM task_comments WHERE task_id = t.id) as comment_count
-        FROM tasks t
-        LEFT JOIN projects p ON t.project_id = p.id
-        LEFT JOIN users u1 ON t.assigned_to = u1.id
-        LEFT JOIN users u2 ON t.created_by = u2.id
-        ${userRole === 'developer' ? 'LEFT JOIN project_members pm ON t.project_id = pm.project_id' : ''}
-        ${whereClause}
-        ORDER BY t.${sortColumn} ${sortDirection}
-        LIMIT ? OFFSET ?
-      `;
-
-      const tasks = await database.query(tasksQuery, [...queryParams, sqlLimit, offset]);
-
-      // Add computed fields
-      const tasksWithExtras = tasks.map(task => {
-        const taskData = snakeToCamel(task);
-        taskData.isOverdue = isOverdue(task.due_date) && task.status !== 'done';
-        return taskData;
+      // Apply pagination and sorting
+      const startIndex = (page - 1) * limit;
+      const endIndex = startIndex + limit;
+      
+      // Sort tasks
+      tasks.sort((a, b) => {
+        const aValue = a[sortBy];
+        const bValue = b[sortBy];
+        
+        if (sortOrder.toUpperCase() === 'ASC') {
+          return aValue > bValue ? 1 : -1;
+        } else {
+          return aValue < bValue ? 1 : -1;
+        }
       });
 
+      const paginatedTasks = tasks.slice(startIndex, endIndex);
+      const totalTasks = tasks.length;
+
       return {
-        tasks: tasksWithExtras,
+        tasks: paginatedTasks,
         pagination: {
           totalItems: totalTasks,
           totalPages: Math.ceil(totalTasks / limit),
@@ -145,54 +98,23 @@ class TaskService {
    */
   async getTaskById(taskId, userId, userRole) {
     try {
+      // Get task using model
+      const task = await Task.findById(taskId);
+      if (!task) {
+        return null;
+      }
+
       // Check if user has access to this task
       if (userRole === 'developer') {
-        const accessCheck = await database.query(`
-          SELECT 1 FROM tasks t
-          LEFT JOIN project_members pm ON t.project_id = pm.project_id
-          WHERE t.id = ? AND (pm.user_id = ? OR t.assigned_to = ?)
-        `, [taskId, userId, userId]);
-        
-        if (accessCheck.length === 0) {
+        const hasAccess = await Task.hasUserAccess(taskId, userId);
+        if (!hasAccess) {
           throw new Error('Access denied to this task');
         }
       }
 
-      // Get task details
-      const taskQuery = `
-        SELECT t.id, t.title, t.description, t.status, t.priority, 
-               t.due_date, t.estimated_hours, t.actual_hours, t.project_id, 
-               t.assigned_to, t.created_by, t.created_at, t.updated_at,
-               p.name as project_name, p.status as project_status,
-               u1.first_name as assignee_first_name, u1.last_name as assignee_last_name, u1.email as assignee_email,
-               u2.first_name as creator_first_name, u2.last_name as creator_last_name, u2.email as creator_email
-        FROM tasks t
-        LEFT JOIN projects p ON t.project_id = p.id
-        LEFT JOIN users u1 ON t.assigned_to = u1.id
-        LEFT JOIN users u2 ON t.created_by = u2.id
-        WHERE t.id = ?
-      `;
-      
-      const tasks = await database.query(taskQuery, [taskId]);
-      if (tasks.length === 0) {
-        return null;
-      }
-
-      const task = snakeToCamel(tasks[0]);
-      task.isOverdue = isOverdue(tasks[0].due_date) && tasks[0].status !== 'done';
-
-      // Get task comments
-      const commentsQuery = `
-        SELECT tc.id, tc.content, tc.created_at, tc.updated_at,
-               u.first_name, u.last_name, u.email, u.avatar_url
-        FROM task_comments tc
-        LEFT JOIN users u ON tc.user_id = u.id
-        WHERE tc.task_id = ?
-        ORDER BY tc.created_at ASC
-      `;
-
-      const comments = await database.query(commentsQuery, [taskId]);
-      task.comments = comments.map(comment => snakeToCamel(comment));
+      // Get task comments using model
+      const comments = await Task.getComments(taskId);
+      task.comments = comments;
 
       return task;
 
@@ -223,48 +145,35 @@ class TaskService {
     try {
       // Verify project exists and user has access
       if (userRole === 'developer') {
-        const projectAccess = await database.query(
-          'SELECT 1 FROM project_members WHERE project_id = ? AND user_id = ?',
-          [projectId, createdBy]
-        );
-        if (projectAccess.length === 0) {
+        const hasAccess = await Project.isMember(projectId, createdBy);
+        if (!hasAccess) {
           throw new Error('Access denied to this project');
         }
       }
 
       // Verify assignee is a project member if specified
       if (assignedTo) {
-        const assigneeCheck = await database.query(
-          'SELECT 1 FROM project_members WHERE project_id = ? AND user_id = ?',
-          [projectId, assignedTo]
-        );
-        if (assigneeCheck.length === 0) {
+        const isAssigneeMember = await Project.isMember(projectId, assignedTo);
+        if (!isAssigneeMember) {
           throw new Error('Assignee is not a member of this project');
         }
       }
 
-      // Insert task
-      const insertQuery = `
-        INSERT INTO tasks (title, description, status, priority, project_id, assigned_to, due_date, estimated_hours, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `;
-      
-      const [result] = await database.query(insertQuery, [
-        title, 
-        description, 
-        status, 
+      // Create task using model
+      const task = await Task.create({
+        title,
+        description,
+        status,
         priority,
         projectId,
         assignedTo,
-        formatDateForDB(dueDate),
+        dueDate,
         estimatedHours,
         createdBy
-      ]);
+      });
 
-      const taskId = result.insertId;
-
-      // Return created task
-      return await this.getTaskById(taskId, createdBy, userRole);
+      // Return created task with full details
+      return await this.getTaskById(task.id, createdBy, userRole);
 
     } catch (error) {
       throw error;
@@ -287,45 +196,16 @@ class TaskService {
         throw new Error('Task not found or access denied');
       }
 
-      // Prepare update data
-      const allowedFields = ['title', 'description', 'status', 'priority', 'assigned_to', 'due_date', 'estimated_hours', 'actual_hours'];
-      const updateData = {};
-      
-      Object.keys(taskData).forEach(key => {
-        const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-        if (allowedFields.includes(snakeKey)) {
-          if (key === 'dueDate') {
-            updateData[snakeKey] = formatDateForDB(taskData[key]);
-          } else {
-            updateData[snakeKey] = taskData[key];
-          }
-        }
-      });
-
-      if (Object.keys(updateData).length === 0) {
-        throw new Error('No valid fields to update');
-      }
-
       // Verify assignee is a project member if being updated
-      if (updateData.assigned_to) {
-        const assigneeCheck = await database.query(
-          'SELECT 1 FROM project_members WHERE project_id = ? AND user_id = ?',
-          [existingTask.projectId, updateData.assigned_to]
-        );
-        if (assigneeCheck.length === 0) {
+      if (taskData.assignedTo) {
+        const isAssigneeMember = await Project.isMember(existingTask.projectId, taskData.assignedTo);
+        if (!isAssigneeMember) {
           throw new Error('Assignee is not a member of this project');
         }
       }
 
-      // Build update query
-      const setClause = Object.keys(updateData).map(key => `${key} = ?`).join(', ');
-      const updateQuery = `
-        UPDATE tasks 
-        SET ${setClause}, updated_at = CURRENT_TIMESTAMP 
-        WHERE id = ?
-      `;
-
-      await database.query(updateQuery, [...Object.values(updateData), taskId]);
+      // Update task using model
+      await Task.update(taskId, taskData);
 
       // Return updated task
       return await this.getTaskById(taskId, updatedBy, userRole);
@@ -355,8 +235,8 @@ class TaskService {
         throw new Error('Only task creator or admin can delete this task');
       }
 
-      // Delete task (cascading deletes will handle comments)
-      await database.query('DELETE FROM tasks WHERE id = ?', [taskId]);
+      // Delete task using model
+      await Task.delete(taskId);
 
       return true;
 
@@ -381,11 +261,12 @@ class TaskService {
         throw new Error('Task not found or access denied');
       }
 
-      // Add comment
-      await database.query(
-        'INSERT INTO task_comments (task_id, user_id, content) VALUES (?, ?, ?)',
-        [taskId, userId, content]
-      );
+      // Add comment using model
+      await Comment.create({
+        taskId,
+        userId,
+        content
+      });
 
       // Return updated task with comments
       return await this.getTaskById(taskId, userId, userRole);
@@ -406,42 +287,21 @@ class TaskService {
   async updateComment(commentId, content, userId, userRole) {
     try {
       // Check if comment exists and user owns it
-      const commentQuery = `
-        SELECT tc.*, t.project_id 
-        FROM task_comments tc
-        LEFT JOIN tasks t ON tc.task_id = t.id
-        WHERE tc.id = ?
-      `;
-      const comments = await database.query(commentQuery, [commentId]);
-      
-      if (comments.length === 0) {
+      const comment = await Comment.findById(commentId);
+      if (!comment) {
         throw new Error('Comment not found');
       }
 
-      const comment = comments[0];
-
       // Only comment owner or admin can update
-      if (userRole !== 'admin' && comment.user_id !== userId) {
+      if (userRole !== 'admin' && comment.userId !== userId) {
         throw new Error('Only comment owner or admin can update this comment');
       }
 
-      // Update comment
-      await database.query(
-        'UPDATE task_comments SET content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [content, commentId]
-      );
+      // Update comment using model
+      await Comment.update(commentId, { content });
 
       // Return updated comment
-      const updatedComments = await database.query(
-        `SELECT tc.id, tc.content, tc.created_at, tc.updated_at,
-                u.first_name, u.last_name, u.email, u.avatar_url
-         FROM task_comments tc
-         LEFT JOIN users u ON tc.user_id = u.id
-         WHERE tc.id = ?`,
-        [commentId]
-      );
-
-      return snakeToCamel(updatedComments[0]);
+      return await Comment.findById(commentId);
 
     } catch (error) {
       throw error;
@@ -458,24 +318,18 @@ class TaskService {
   async deleteComment(commentId, userId, userRole) {
     try {
       // Check if comment exists and user owns it
-      const comments = await database.query(
-        'SELECT user_id FROM task_comments WHERE id = ?',
-        [commentId]
-      );
-      
-      if (comments.length === 0) {
+      const comment = await Comment.findById(commentId);
+      if (!comment) {
         throw new Error('Comment not found');
       }
 
-      const comment = comments[0];
-
       // Only comment owner or admin can delete
-      if (userRole !== 'admin' && comment.user_id !== userId) {
+      if (userRole !== 'admin' && comment.userId !== userId) {
         throw new Error('Only comment owner or admin can delete this comment');
       }
 
-      // Delete comment
-      await database.query('DELETE FROM task_comments WHERE id = ?', [commentId]);
+      // Delete comment using model
+      await Comment.delete(commentId);
 
       return true;
 
@@ -485,35 +339,13 @@ class TaskService {
   }
 
   /**
-   * Get user's assigned tasks
+   * Get user's tasks
    * @param {number} userId - User ID
-   * @returns {array} User's assigned tasks
+   * @returns {array} User's tasks
    */
   async getUserTasks(userId) {
     try {
-      const query = `
-        SELECT t.id, t.title, t.description, t.status, t.priority, 
-               t.due_date, t.estimated_hours, t.actual_hours, t.created_at,
-               p.name as project_name, p.id as project_id
-        FROM tasks t
-        LEFT JOIN projects p ON t.project_id = p.id
-        WHERE t.assigned_to = ?
-        ORDER BY 
-          CASE 
-            WHEN t.due_date < NOW() AND t.status != 'done' THEN 1
-            ELSE 2
-          END,
-          t.due_date ASC,
-          t.priority DESC
-      `;
-
-      const tasks = await database.query(query, [userId]);
-      return tasks.map(task => {
-        const taskData = snakeToCamel(task);
-        taskData.isOverdue = isOverdue(task.due_date) && task.status !== 'done';
-        return taskData;
-      });
-
+      return await Task.findByAssignee(userId);
     } catch (error) {
       throw error;
     }
@@ -528,38 +360,15 @@ class TaskService {
    */
   async getTasksByProject(projectId, userId, userRole) {
     try {
-      // Check if user has access to project
+      // Check project access
       if (userRole === 'developer') {
-        const projectAccess = await database.query(
-          'SELECT 1 FROM project_members WHERE project_id = ? AND user_id = ?',
-          [projectId, userId]
-        );
-        if (projectAccess.length === 0) {
+        const hasAccess = await Project.isMember(projectId, userId);
+        if (!hasAccess) {
           throw new Error('Access denied to this project');
         }
       }
 
-      const query = `
-        SELECT t.id, t.title, t.description, t.status, t.priority, 
-               t.due_date, t.estimated_hours, t.actual_hours, t.created_at,
-               t.assigned_to, t.created_by,
-               u1.first_name as assignee_first_name, u1.last_name as assignee_last_name,
-               u2.first_name as creator_first_name, u2.last_name as creator_last_name,
-               (SELECT COUNT(*) FROM task_comments WHERE task_id = t.id) as comment_count
-        FROM tasks t
-        LEFT JOIN users u1 ON t.assigned_to = u1.id
-        LEFT JOIN users u2 ON t.created_by = u2.id
-        WHERE t.project_id = ?
-        ORDER BY t.status DESC, t.priority DESC, t.created_at DESC
-      `;
-
-      const tasks = await database.query(query, [projectId]);
-      return tasks.map(task => {
-        const taskData = snakeToCamel(task);
-        taskData.isOverdue = isOverdue(task.due_date) && task.status !== 'done';
-        return taskData;
-      });
-
+      return await Task.findByProject(projectId);
     } catch (error) {
       throw error;
     }

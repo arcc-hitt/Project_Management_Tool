@@ -1,4 +1,4 @@
-import database from '../config/database.js';
+import { User } from '../models/index.js';
 import { 
   hashPassword, 
   comparePassword, 
@@ -21,33 +21,19 @@ class AuthService {
 
     try {
       // Check if user already exists
-      const existingUser = await this.findUserByEmail(email);
+      const existingUser = await User.findByEmail(email);
       if (existingUser) {
         throw new Error('User with this email already exists');
       }
 
-      // Hash password
-      const passwordHash = await hashPassword(password);
-
-      // Insert user into database
-      const insertQuery = `
-        INSERT INTO users (email, password_hash, first_name, last_name, role)
-        VALUES (?, ?, ?, ?, ?)
-      `;
-      
-      const result = await database.query(insertQuery, [
-        email, 
-        passwordHash, 
-        firstName, 
-        lastName, 
+      // Create user using model
+      const user = await User.create({
+        email,
+        password,
+        firstName,
+        lastName,
         role
-      ]);
-
-      // Get the created user
-      const user = await this.findUserById(result.insertId);
-      if (!user) {
-        throw new Error('Failed to create user');
-      }
+      });
 
       // Generate token
       const token = generateToken({
@@ -56,11 +42,11 @@ class AuthService {
         role: user.role
       });
 
-      // Remove password hash from response
-      const { passwordHash: _, ...userWithoutPassword } = user;
+      // Get user data without password
+      const userWithoutPassword = await User.findById(user.id);
 
       return {
-        user: snakeToCamel(userWithoutPassword),
+        user: userWithoutPassword,
         token
       };
 
@@ -77,8 +63,8 @@ class AuthService {
    */
   async login(email, password) {
     try {
-      // Find user by email
-      const user = await this.findUserByEmail(email);
+      // Find user by email using model
+      const user = await User.findByEmail(email);
       if (!user) {
         throw new Error('Invalid email or password');
       }
@@ -88,8 +74,8 @@ class AuthService {
         throw new Error('Account is deactivated');
       }
 
-      // Compare password
-      const isPasswordValid = await comparePassword(password, user.passwordHash);
+      // Verify password using model method
+      const isPasswordValid = await User.verifyPassword(user.id, password);
       if (!isPasswordValid) {
         throw new Error('Invalid email or password');
       }
@@ -101,11 +87,8 @@ class AuthService {
         role: user.role
       });
 
-      // Remove password hash from response
-      const { passwordHash: _, ...userWithoutPassword } = user;
-
       return {
-        user: snakeToCamel(userWithoutPassword),
+        user,
         token
       };
 
@@ -121,15 +104,12 @@ class AuthService {
    */
   async getCurrentUser(userId) {
     try {
-      const user = await this.findUserById(userId);
+      const user = await User.findById(userId);
       if (!user) {
         throw new Error('User not found');
       }
 
-      // Remove password hash from response
-      const { passwordHash: _, ...userWithoutPassword } = user;
-
-      return snakeToCamel(userWithoutPassword);
+      return user;
 
     } catch (error) {
       throw error;
@@ -145,29 +125,14 @@ class AuthService {
    */
   async updatePassword(userId, currentPassword, newPassword) {
     try {
-      // Get user with password hash
-      const user = await this.findUserById(userId);
-      if (!user) {
-        throw new Error('User not found');
-      }
-
-      // Verify current password
-      const isCurrentPasswordValid = await comparePassword(currentPassword, user.passwordHash);
+      // Verify current password using model
+      const isCurrentPasswordValid = await User.verifyPassword(userId, currentPassword);
       if (!isCurrentPasswordValid) {
         throw new Error('Current password is incorrect');
       }
 
-      // Hash new password
-      const newPasswordHash = await hashPassword(newPassword);
-
-      // Update password in database
-      const updateQuery = `
-        UPDATE users 
-        SET password_hash = ?, updated_at = CURRENT_TIMESTAMP 
-        WHERE id = ?
-      `;
-      
-      await database.query(updateQuery, [newPasswordHash, userId]);
+      // Update password using model
+      await User.updatePassword(userId, newPassword);
 
       return true;
 
@@ -177,44 +142,26 @@ class AuthService {
   }
 
   /**
-   * Find user by email
+   * Find user by email (legacy method for backward compatibility)
    * @param {string} email - User email
    * @returns {object|null} User data or null
    */
   async findUserByEmail(email) {
     try {
-      const query = `
-        SELECT id, email, password_hash, first_name, last_name, 
-               role, avatar_url, is_active, created_at, updated_at
-        FROM users 
-        WHERE email = ?
-      `;
-      
-      const users = await database.query(query, [email]);
-      return users.length > 0 ? snakeToCamel(users[0]) : null;
-
+      return await User.findByEmail(email);
     } catch (error) {
       throw error;
     }
   }
 
   /**
-   * Find user by ID
+   * Find user by ID (legacy method for backward compatibility)
    * @param {number} id - User ID
    * @returns {object|null} User data or null
    */
   async findUserById(id) {
     try {
-      const query = `
-        SELECT id, email, password_hash, first_name, last_name, 
-               role, avatar_url, is_active, created_at, updated_at
-        FROM users 
-        WHERE id = ? AND is_active = TRUE
-      `;
-      
-      const users = await database.query(query, [id]);
-      return users.length > 0 ? snakeToCamel(users[0]) : null;
-
+      return await User.findById(id);
     } catch (error) {
       throw error;
     }
@@ -227,7 +174,7 @@ class AuthService {
    */
   async verifyUserExists(userId) {
     try {
-      const user = await this.findUserById(userId);
+      const user = await User.findById(userId);
       return user !== null;
     } catch (error) {
       return false;
