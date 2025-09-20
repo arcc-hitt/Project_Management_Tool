@@ -74,6 +74,9 @@ export const authenticate = async (req, res, next) => {
   }
 };
 
+// Alias for backward compatibility
+export const authenticateToken = authenticate;
+
 /**
  * Middleware to authorize user roles
  * @param {string[]} roles - Allowed roles

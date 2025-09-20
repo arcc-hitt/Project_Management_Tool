@@ -56,6 +56,41 @@ export const sendError = (res, message, statusCode = 500, errors = null) => {
 };
 
 /**
+ * Format API response for consistent structure
+ * @param {any} data - Response data
+ * @param {string} message - Response message
+ * @returns {object} Formatted response object
+ */
+export const formatApiResponse = (data, message = 'Success') => {
+  return {
+    success: true,
+    data,
+    message,
+    timestamp: new Date().toISOString(),
+  };
+};
+
+/**
+ * Format error response for consistent structure
+ * @param {string} message - Error message
+ * @param {any} errors - Additional error details
+ * @returns {object} Formatted error response object
+ */
+export const formatErrorResponse = (message, errors = null) => {
+  const response = {
+    success: false,
+    message,
+    timestamp: new Date().toISOString(),
+  };
+
+  if (errors) {
+    response.errors = errors;
+  }
+
+  return response;
+};
+
+/**
  * Convert camelCase to snake_case for database queries
  * @param {object} obj - Object with camelCase keys
  * @returns {object} Object with snake_case keys
