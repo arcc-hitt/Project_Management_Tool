@@ -11,17 +11,23 @@ import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { taskService } from '../services/taskService';
-import type { Task } from '../types';
+import { projectService } from '../services/projectService';
+import { useDebounce } from '../hooks/useDebounce';
+import type { Task, Project } from '../types';
 import { toast } from 'sonner';
 
 const TasksPage: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+
+  // Debounce search term to prevent API calls on every keystroke
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
   // Create task form state
   const [createForm, setCreateForm] = useState({
@@ -35,13 +41,14 @@ const TasksPage: React.FC = () => {
 
   useEffect(() => {
     fetchTasks();
-  }, [statusFilter, priorityFilter, searchTerm]);
+    fetchProjects();
+  }, [statusFilter, priorityFilter, debouncedSearchTerm]);
 
   const fetchTasks = async () => {
     try {
       setLoading(true);
       const filters = {
-        search: searchTerm || undefined,
+        search: debouncedSearchTerm || undefined,
         status: statusFilter !== 'all' ? statusFilter : undefined,
         priority: priorityFilter !== 'all' ? priorityFilter : undefined
       };
@@ -117,10 +124,29 @@ const TasksPage: React.FC = () => {
     }
   };
 
+  const fetchProjects = async () => {
+    try {
+      const response = await projectService.getProjects({ limit: 50 });
+      setProjects(response.projects);
+    } catch (error: any) {
+      console.error('Failed to fetch projects:', error);
+      // Mock projects for demo
+      setProjects([
+        { id: 1, name: 'Project Management Tool', description: 'Main project', status: 'active', priority: 'high', startDate: '2025-01-01', managerId: 1, createdAt: '', updatedAt: '' },
+        { id: 2, name: 'Website Redesign', description: 'UI/UX improvements', status: 'active', priority: 'medium', startDate: '2025-01-15', managerId: 1, createdAt: '', updatedAt: '' }
+      ]);
+    }
+  };
+
   const handleCreateTask = async () => {
     try {
       if (!createForm.title.trim()) {
         toast.error('Task title is required');
+        return;
+      }
+
+      if (!createForm.projectId || createForm.projectId === 0) {
+        toast.error('Please select a project');
         return;
       }
 
@@ -314,6 +340,21 @@ const TasksPage: React.FC = () => {
                   onChange={(e) => setCreateForm(prev => ({ ...prev, title: e.target.value }))}
                   placeholder="Enter task title"
                 />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="project">Project</Label>
+                <Select value={createForm.projectId.toString()} onValueChange={(value) => setCreateForm(prev => ({ ...prev, projectId: parseInt(value) }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a project" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id.toString()}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>

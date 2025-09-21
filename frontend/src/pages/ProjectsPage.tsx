@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { projectService } from '../services/projectService';
+import { useDebounce } from '../hooks/useDebounce';
 import type { Project } from '../types';
 import { toast } from 'sonner';
 
@@ -21,6 +22,9 @@ const ProjectsPage: React.FC = () => {
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 
+  // Debounce search term to prevent API calls on every keystroke
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+
   // Create project form state
   const [createForm, setCreateForm] = useState({
     name: '',
@@ -32,13 +36,13 @@ const ProjectsPage: React.FC = () => {
 
   useEffect(() => {
     fetchProjects();
-  }, [statusFilter, priorityFilter, searchTerm]);
+  }, [statusFilter, priorityFilter, debouncedSearchTerm]);
 
   const fetchProjects = async () => {
     try {
       setLoading(true);
       const filters = {
-        search: searchTerm || undefined,
+        search: debouncedSearchTerm || undefined,
         status: statusFilter !== 'all' ? statusFilter : undefined,
         priority: priorityFilter !== 'all' ? priorityFilter : undefined
       };
