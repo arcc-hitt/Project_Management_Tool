@@ -119,10 +119,10 @@ const startServer = async () => {
 
     // Graceful shutdown
     const gracefulShutdown = async (signal) => {
-      console.log(`\n⚠️  Received ${signal}. Starting graceful shutdown...`);
+  console.log(`\nReceived ${signal}. Starting graceful shutdown...`);
       
       server.close(async () => {
-        console.log('🔄 HTTP server closed');
+  console.log('HTTP server closed');
         
         try {
           await database.close();
@@ -145,5 +145,9 @@ const startServer = async () => {
   }
 };
 
-// Start the server
-startServer();
+// Only start the server if not under test (so tests can import app without listening)
+if (process.env.NODE_ENV !== 'test') {
+  startServer();
+}
+
+export default app;
