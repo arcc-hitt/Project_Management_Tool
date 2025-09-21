@@ -1,205 +1,213 @@
 # Project Management Tool
 
-A comprehensive web application for managing software projects with task tracking, team collaboration, and AI-powered user story generation.
+Modern project management web app with task tracking, team collaboration, dashboards, and optional AI-powered helpers.
 
-## 🚀 Features
+## Features
 
-- **User Management**: Role-based access control (Admin, Manager, Developer)
-- **Project Management**: Create, edit, and track projects with team assignments
-- **Task Management**: Full task lifecycle with status tracking and commenting
-- **Dashboard**: Real-time metrics and progress tracking
-- **AI Integration**: Automated user story generation using GROQ API
-- **Authentication**: JWT-based secure authentication
+- Role-based access control (Admin, Manager, Developer)
+- Project and task management with comments and activity log
+- Dashboard with stats and progress
+- JWT authentication
+- AI features via GROQ API
 
-## 🛠 Tech Stack
+## Tech Stack
 
-### Backend
-- **Runtime**: Node.js (Latest)
-- **Framework**: Express.js
-- **Database**: MySQL
-- **Authentication**: JWT
-- **Documentation**: Swagger
-- **Testing**: Jest
-- **AI Integration**: GROQ API
+- Backend: Node.js 18+, Express, Sequelize (MySQL), JWT
+- Frontend: React + Vite + TypeScript, Tailwind CSS, shadcn/ui
+- Testing: Jest/Supertest (backend), Vitest/RTL + Playwright (frontend)
+- Docker: docker-compose for MySQL, API, and frontend
 
-### Frontend
-- **Framework**: React 18
-- **Build Tool**: Vite
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS v4
-- **UI Components**: Shadcn UI
-- **State Management**: Context API + React Query
-- **Routing**: React Router v6
-
-## 📁 Project Structure
+## Project Structure
 
 ```
-project-management-tool/
-├── backend/                 # Node.js Backend
-│   ├── src/
-│   │   ├── controllers/     # Route controllers
-│   │   ├── middleware/      # Custom middleware
-│   │   ├── models/         # Database models
-│   │   ├── routes/         # API routes
-│   │   ├── services/       # Business logic
-│   │   ├── utils/          # Utilities
-│   │   └── config/         # Configuration
-│   ├── tests/              # Unit tests
-│   └── docs/               # API documentation
-├── frontend/               # React Frontend
-│   ├── src/
-│   │   ├── components/     # Reusable components
-│   │   ├── pages/          # Page components
-│   │   ├── hooks/          # Custom hooks
-│   │   ├── services/       # API services
-│   │   ├── utils/          # Utilities
-│   │   └── types/          # TypeScript types
-│   └── public/             # Static assets
-├── database/               # Database (managed by programmatic migrations)
-│   └── migrations/         # Base SQL for initial schema (consumed by migrate.js)
-└── docs/                  # Project documentation
-    ├── api/               # API documentation
-    └── er-diagram/        # Database design
+Project_Management_Tool/
+├─ backend/
+│  ├─ src/
+│  │  ├─ controllers/ middleware/ models/ routes/ services/ utils/ config/
+│  │  └─ scripts/ (migrate.js, seed.js)
+│  ├─ database/
+│  │  ├─ migrations/ (base SQL)
+│  │  └─ seeds/
+│  └─ tests/
+├─ frontend/
+│  ├─ src/ (components, pages, hooks, services, contexts, types)
+│  └─ e2e/ (Playwright)
+├─ docker-compose.yml
+├─ postman_collection.json
+└─ postman_environment.json
 ```
 
-## 🚦 Getting Started
+## Prerequisites
 
-### Prerequisites
-- Node.js (v18 or higher)
-- MySQL (v8 or higher)
-- npm or yarn
+- Node.js 18 or newer
+- MySQL 8+
+- npm (comes with Node.js)
+- Optional: Docker Desktop (Windows/macOS)
 
-### Installation
+## Environment Variables
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd project-management-tool
-   ```
+### Backend (`backend/.env`)
+The backend already includes a sample `.env`. Open `backend/.env` and verify/update:
 
-2. **Backend Setup**
-   ```bash
-   cd backend
-   npm install
-   cp .env.example .env
-   # Configure your environment variables
-   npm run dev
-   ```
+```
+NODE_ENV=development
+PORT=5000
 
-3. **Frontend Setup**
-   ```bash
-   cd frontend
-   npm install
-   npm run dev
-   ```
+# MySQL
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=project_management_tool
+DB_USER=root
+DB_PASSWORD=your_mysql_password
 
-4. **Database Setup**
-   ```bash
-   # Create MySQL database (first time only)
-   mysql -u root -p -e "CREATE DATABASE project_management_tool;"
+# JWT
+JWT_SECRET=please_generate_a_strong_secret_at_least_32_chars
+JWT_REFRESH_SECRET=another_strong_secret
+JWT_EXPIRES_IN=7d
 
-   # Apply programmatic migrations (recommended)
-   cd backend
-   npm run migrate
+# AI (optional)
+GROQ_API_KEY=
 
-   # Optional: seed data (no-op if seed file is absent)
-   npm run seed
-   ```
+# CORS
+FRONTEND_URL=http://localhost:5173
 
-## 📡 API Endpoints
+# Rate limiting
+RATE_LIMIT_MAX=100
+RATE_LIMIT_WINDOW_MS=900000
+```
 
-### Authentication
-- `POST /api/auth/register` - User registration
-- `POST /api/auth/login` - User login
-- `POST /api/auth/logout` - User logout
-- `GET /api/auth/me` - Get current user
+Note: When running with Docker, prefer setting `FRONTEND_URL` for CORS. The application reads `FRONTEND_URL` (not `CORS_ORIGIN`).
 
-### Users
-- `GET /api/users` - Get all users
-- `GET /api/users/:id` - Get user by ID
-- `PUT /api/users/:id` - Update user
-- `DELETE /api/users/:id` - Delete user
+### Frontend (`frontend/.env`)
+Create a `.env` file in `frontend/` if missing:
 
-### Projects
-- `GET /api/projects` - Get all projects
-- `POST /api/projects` - Create project
-- `GET /api/projects/:id` - Get project by ID
-- `PUT /api/projects/:id` - Update project
-- `DELETE /api/projects/:id` - Delete project
-- `POST /api/projects/:id/members` - Add team member
+```
+VITE_API_URL=http://localhost:5000/api
+VITE_APP_NAME=Project_Management_Tool
+VITE_APP_VERSION=1.0.0
+```
 
-### Tasks
-- `GET /api/tasks` - Get all tasks
-- `POST /api/tasks` - Create task
-- `GET /api/tasks/:id` - Get task by ID
-- `PUT /api/tasks/:id` - Update task
-- `DELETE /api/tasks/:id` - Delete task
-- `POST /api/tasks/:id/comments` - Add comment
+## Local Development (Windows PowerShell examples)
 
-### Dashboard
-- `GET /api/dashboard/stats` - Get dashboard statistics
-- `GET /api/dashboard/overdue` - Get overdue tasks
-- `GET /api/dashboard/progress/:projectId` - Get project progress
+1) Install dependencies
 
-### AI Features (Bonus)
-- `POST /api/ai/generate-user-stories` - Generate user stories from description
+```powershell
+# Backend
+cd backend
+npm install
 
-## 🏗 Development Workflow
+# Frontend (in a new terminal)
+cd ../frontend
+npm install
+```
 
-The project is organized into feature branches for easy development:
+2) Create database and run migrations
 
-1. **main** - Production ready code
-2. **feature/backend-foundation** - Basic Express setup
-3. **feature/authentication** - JWT authentication
-4. **feature/user-management** - User CRUD operations
-5. **feature/project-management** - Project management APIs
-6. **feature/task-management** - Task management APIs
-7. **feature/dashboard-apis** - Dashboard and reporting
-8. **feature/frontend-foundation** - React setup
-9. **feature/frontend-auth** - Frontend authentication
-10. **feature/frontend-projects** - Project management UI
-11. **feature/frontend-tasks** - Task management UI
-12. **feature/frontend-dashboard** - Dashboard UI
-13. **feature/ai-integration** - GROQ API integration
+```powershell
+# Create the database (first time only; requires MySQL in PATH)
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS project_management_tool;"
 
-## 🧪 Testing
+# Run migrations and optional seeds
+cd ../backend
+npm run migrate
+npm run seed   # optional
+```
 
-```bash
-# Backend tests
+3) Start the apps
+
+```powershell
+# Backend (http://localhost:5000)
+cd backend
+npm run dev
+
+# Frontend (http://localhost:5173)
+cd ../frontend
+npm run dev
+```
+
+Backend API base URL: http://localhost:5000/api
+
+## Run with Docker
+
+```powershell
+docker compose up -d --build
+```
+
+Services:
+- MySQL: localhost:3306 (container: project-mgmt-db)
+- API: http://localhost:5000 (container: project-mgmt-backend)
+- Frontend: http://localhost:5173 (container: project-mgmt-frontend)
+
+Database initialization: `docker-compose.yml` mounts `backend/database/migrations` to the MySQL init folder, so the base schema applies on the first run. To seed data with Docker:
+
+```powershell
+docker exec -it project-mgmt-backend npm run seed
+```
+
+Tip (CORS in Docker): ensure the backend sees `FRONTEND_URL=http://localhost:5173`. You can add it under the `backend.environment` section in `docker-compose.yml`.
+
+## Testing
+
+```powershell
+# Backend unit/integration tests
 cd backend
 npm test
 
-# Frontend tests
-cd frontend
+# Frontend unit tests
+cd ../frontend
 npm test
+
+# Frontend E2E tests (requires app running or let Playwright start it)
+npm run test:e2e
 ```
 
-## 📊 Database Schema
+## Postman
 
-Refer to `docs/er-diagram/` for the complete database design.
+- Import `postman_collection.json` and `postman_environment.json` from the repo root.
+- Update the environment base URL to `http://localhost:5000/api` if needed.
 
-## 🤝 Contributing
+## Notable API Endpoints
 
-1. Create a feature branch
-2. Make your changes
-3. Add tests
-4. Submit a pull request
+- Auth: `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/me`
+- Users: `GET /api/users`, `GET /api/users/:id`, `PUT /api/users/:id`, `DELETE /api/users/:id`
+- Projects: `GET/POST /api/projects`, `GET/PUT/DELETE /api/projects/:id`, `POST /api/projects/:id/members`
+- Tasks: `GET/POST /api/tasks`, `GET/PUT/DELETE /api/tasks/:id`, `POST /api/tasks/:id/comments`
+- Dashboard: `GET /api/dashboard/stats`, `GET /api/dashboard/overdue`, `GET /api/dashboard/progress/:projectId`
 
-## 📝 License
+## Scripts quick reference
 
-This project is licensed under the MIT License.
+Backend (`/backend/package.json`):
+- `npm run dev` – start API in watch mode
+- `npm start` – start API
+- `npm run migrate` – run DB migrations
+- `npm run seed` – seed sample data
+- `npm test` – run Jest tests
 
-## 🎯 Assumptions and Future Improvements
+Frontend (`/frontend/package.json`):
+- `npm run dev` – start Vite dev server
+- `npm run build` – type-check + build
+- `npm run preview` – preview built site
+- `npm test` – run unit tests
+- `npm run test:e2e` – Playwright E2E tests
 
-### Assumptions
-- Users will have valid email addresses
-- MySQL is available and configured
-- GROQ API key is provided for AI features
+## Troubleshooting
 
-### Possible Improvements
-- Real-time notifications using WebSockets
-- File attachment support for tasks
-- Advanced reporting with charts
-- Mobile application
-- Integration with external tools (Slack, Jira)
-- Advanced AI features (task prioritization, time estimation)
+- CORS blocked: ensure backend `FRONTEND_URL` matches your frontend origin (e.g., `http://localhost:5173`). For Docker, set this in `docker-compose.yml` under the backend service.
+- DB connection refused: verify MySQL is running and credentials in `backend/.env` match your server.
+- Port in use: change `PORT` in `backend/.env` or Vite port with `--port` (e.g., `npm run dev -- --port 5174`). Update `VITE_API_URL` accordingly.
+- JWT errors: use strong `JWT_SECRET` (≥32 chars) and restart the API after changes.
+
+## Database Schema
+
+See `docs/er-diagram/` for the ER diagram.
+
+## Contributing
+
+1) Create a feature branch
+2) Make your changes with tests
+3) Open a pull request
+
+## Contact Me
+
+- Email: mahulearchit@gmail.com
+- Phone: 8766973101

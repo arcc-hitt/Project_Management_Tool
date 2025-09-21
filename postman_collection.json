@@ -1,0 +1,206 @@
+{
+	"info": {
+		"name": "Project Management Tool API",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_postman_id": "2c3a4e0a-7b7f-4b2e-8e1f-0f9a8b7c6d5e",
+		"description": "Comprehensive collection to test all backend endpoints of the Project Management Tool. Uses environment variables for base URL and tokens."
+	},
+	"variable": [
+		{"key": "baseUrl", "value": "{{baseUrl}}"}
+	],
+	"item": [
+		{
+			"name": "0 - Health",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {"raw": "{{baseUrl}}/../health", "host": ["{{baseUrl}}"], "path": ["..", "health"]}
+					}
+				}
+			]
+		},
+		{
+			"name": "1 - Auth",
+			"item": [
+				{
+					"name": "Register",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"url": {"raw": "{{baseUrl}}/auth/register", "host": ["{{baseUrl}}"], "path": ["auth","register"]},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"user+{{$timestamp}}@example.com\",\n  \"password\": \"Password123\",\n  \"firstName\": \"Test\",\n  \"lastName\": \"User\",\n  \"role\": \"developer\"\n}"
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Register returns tokens', function () {",
+									"  pm.response.to.have.status(201);",
+									"  const data = pm.response.json().data || {};",
+									"  pm.expect(data.accessToken).to.be.a('string');",
+									"  pm.expect(data.refreshToken).to.be.a('string');",
+									"  pm.environment.set('accessToken', data.accessToken);",
+									"  pm.environment.set('refreshToken', data.refreshToken);",
+									"  if (data.user && data.user.id) pm.environment.set('userId', data.user.id);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Login (Admin)",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"url": {"raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth","login"]},
+						"body": {"mode": "raw", "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{password}}\"\n}"}
+					},
+					"event": [
+						{"listen": "test", "script": {"type": "text/javascript", "exec": [
+							"const json = pm.response.json();",
+							"pm.test('Login OK', ()=> pm.response.to.have.status(200));",
+							"pm.environment.set('accessToken', json.data.accessToken || json.data.token);",
+							"pm.environment.set('refreshToken', json.data.refreshToken);",
+							"if (json.data.user && json.data.user.id) pm.environment.set('userId', json.data.user.id);"
+						]}}
+					]
+				},
+				{"name": "Me", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/auth/me", "host": ["{{baseUrl}}"], "path": ["auth","me"]}}},
+				{"name": "Verify Token", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/auth/verify", "host": ["{{baseUrl}}"], "path": ["auth","verify"]}}},
+				{"name": "Refresh Token", "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "url": {"raw": "{{baseUrl}}/auth/refresh", "host": ["{{baseUrl}}"], "path": ["auth","refresh"]}, "body": {"mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"}}, "event": [{"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","if (json.data && json.data.accessToken) pm.environment.set('accessToken', json.data.accessToken);"]}}]},
+				{"name": "Update Password", "request": {"method": "PUT", "header": [{"key": "Authorization", "value": "Bearer {{accessToken}}"},{"key":"Content-Type","value":"application/json"}], "url": {"raw": "{{baseUrl}}/auth/update-password", "host": ["{{baseUrl}}"], "path": ["auth","update-password"]}, "body": {"mode":"raw","raw":"{\n  \"currentPassword\": \"{{password}}\",\n  \"newPassword\": \"Password1234\"\n}"}}},
+				{"name": "Request Password Reset", "request": {"method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "url": {"raw": "{{baseUrl}}/auth/request-password-reset", "host": ["{{baseUrl}}"], "path": ["auth","request-password-reset"]}, "body": {"mode":"raw","raw":"{\n  \"email\": \"{{adminEmail}}\"\n}"}}},
+				{"name": "Reset Password (with token)", "request": {"method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "url": {"raw": "{{baseUrl}}/auth/reset-password", "host": ["{{baseUrl}}"], "path": ["auth","reset-password"]}, "body": {"mode":"raw","raw":"{\n  \"resetToken\": \"<paste from request-password-reset>\",\n  \"newPassword\": \"Password123\"\n}"}}},
+				{"name": "Send Verification Email", "request": {"method": "POST", "header": [{"key": "Authorization", "value": "Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/auth/send-verification", "host": ["{{baseUrl}}"], "path": ["auth","send-verification"]}}},
+				{"name": "Verify Email", "request": {"method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "url": {"raw": "{{baseUrl}}/auth/verify-email", "host": ["{{baseUrl}}"], "path": ["auth","verify-email"]}, "body": {"mode":"raw","raw":"{\n  \"verificationToken\": \"<paste from send-verification>\"\n}"}}},
+				{"name": "Update Profile", "request": {"method": "PUT", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"},{"key":"Content-Type","value":"application/json"}], "url": {"raw": "{{baseUrl}}/auth/update-profile", "host": ["{{baseUrl}}"], "path": ["auth","update-profile"]}, "body": {"mode":"raw","raw":"{\n  \"firstName\": \"Admin\",\n  \"lastName\": \"User\"\n}"}}},
+						{"name": "Logout", "request": {"method": "POST", "header": [{"key": "Authorization", "value": "Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/auth/logout", "host": ["{{baseUrl}}"], "path": ["auth","logout"]}}},
+						{"name": "Forgot Password (alias)", "request": {"method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "url": {"raw": "{{baseUrl}}/auth/forgot-password", "host": ["{{baseUrl}}"], "path": ["auth","forgot-password"]}, "body": {"mode":"raw","raw":"{\n  \"email\": \"{{adminEmail}}\"\n}"}}},
+						{"name": "Profile Update (alias)", "request": {"method": "PUT", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"},{"key":"Content-Type","value":"application/json"}], "url": {"raw": "{{baseUrl}}/auth/profile", "host": ["{{baseUrl}}"], "path": ["auth","profile"]}, "body": {"mode":"raw","raw":"{\n  \"firstName\": \"Admin\"\n}"}}},
+						{"name": "Change Password (alias)", "request": {"method": "POST", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"},{"key":"Content-Type","value":"application/json"}], "url": {"raw": "{{baseUrl}}/auth/change-password", "host": ["{{baseUrl}}"], "path": ["auth","change-password"]}, "body": {"mode":"raw","raw":"{\n  \"currentPassword\": \"{{password}}\",\n  \"newPassword\": \"Password1234\"\n}"}}}
+			]
+		},
+		{
+			"name": "2 - Users",
+			"item": [
+				{"name": "List Users", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/users", "host": ["{{baseUrl}}"], "path": ["users"]}}},
+				{"name": "Create User", "request": {"method": "POST", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"},{"key":"Content-Type","value":"application/json"}], "url": {"raw": "{{baseUrl}}/users", "host": ["{{baseUrl}}"], "path": ["users"]}, "body": {"mode":"raw","raw":"{\n  \"email\": \"new.dev+{{$timestamp}}@example.com\",\n  \"password\": \"Password123\",\n  \"firstName\": \"New\",\n  \"lastName\": \"Dev\",\n  \"role\": \"developer\"\n}"}}},
+				{"name": "Get User By Id", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["users","{{userId}}"]}}},
+				{"name": "Update User", "request": {"method": "PUT", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"},{"key":"Content-Type","value":"application/json"}], "url": {"raw": "{{baseUrl}}/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["users","{{userId}}"]}, "body": {"mode":"raw","raw":"{\n  \"firstName\": \"Updated\"\n}"}}},
+				{"name": "Update User Role", "request": {"method": "PUT", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"},{"key":"Content-Type","value":"application/json"}], "url": {"raw": "{{baseUrl}}/users/{{userId}}/role", "host": ["{{baseUrl}}"], "path": ["users","{{userId}}","role"]}, "body": {"mode":"raw","raw":"{\n  \"role\": \"manager\"\n}"}}},
+				{"name": "Delete User", "request": {"method": "DELETE", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["users","{{userId}}"]}}},
+				{"name": "Reactivate User", "request": {"method": "POST", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/users/{{userId}}/reactivate", "host": ["{{baseUrl}}"], "path": ["users","{{userId}}","reactivate"]}}},
+				{"name": "User Stats", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/users/stats", "host": ["{{baseUrl}}"], "path": ["users","stats"]}}}
+			]
+		},
+		{
+			"name": "3 - Projects",
+			"item": [
+				{"name": "List Projects", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/projects?limit=10&page=1", "host": ["{{baseUrl}}"], "path": ["projects"], "query": [{"key":"limit","value":"10"},{"key":"page","value":"1"}]}}, "event": [{"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","const first = (json.data && json.data.projects && json.data.projects[0]) || null;","if(first && first.id) pm.environment.set('projectId', first.id);"]}}]},
+				{"name": "My Projects", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/projects/my", "host": ["{{baseUrl}}"], "path": ["projects","my"]}}},
+				{"name": "Create Project", "request": {"method": "POST", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"},{"key":"Content-Type","value":"application/json"}], "url": {"raw": "{{baseUrl}}/projects", "host": ["{{baseUrl}}"], "path": ["projects"]}, "body": {"mode":"raw","raw":"{\n  \"name\": \"Demo Project {{ $timestamp }}\",\n  \"description\": \"Postman created project\",\n  \"status\": \"active\",\n  \"priority\": \"medium\"\n}"}}, "event": [{"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","if (json.data && json.data.id) pm.environment.set('projectId', json.data.id);"]}}]},
+				{"name": "Get Project By Id", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/projects/{{projectId}}", "host": ["{{baseUrl}}"], "path": ["projects","{{projectId}}"]}}},
+				{"name": "Update Project", "request": {"method": "PUT", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"},{"key":"Content-Type","value":"application/json"}], "url": {"raw": "{{baseUrl}}/projects/{{projectId}}", "host": ["{{baseUrl}}"], "path": ["projects","{{projectId}}"]}, "body": {"mode":"raw","raw":"{\n  \"description\": \"Updated via Postman\"\n}"}}},
+				{"name": "Delete Project", "request": {"method": "DELETE", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/projects/{{projectId}}", "host": ["{{baseUrl}}"], "path": ["projects","{{projectId}}"]}}},
+				{"name": "Get Project Members", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/projects/{{projectId}}/members", "host": ["{{baseUrl}}"], "path": ["projects","{{projectId}}","members"]}}},
+				{"name": "Get Project Tasks", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/projects/{{projectId}}/tasks", "host": ["{{baseUrl}}"], "path": ["projects","{{projectId}}","tasks"]}}},
+				{"name": "Add Member", "request": {"method": "POST", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"},{"key":"Content-Type","value":"application/json"}], "url": {"raw": "{{baseUrl}}/projects/{{projectId}}/members", "host": ["{{baseUrl}}"], "path": ["projects","{{projectId}}","members"]}, "body": {"mode":"raw","raw":"{\n  \"userId\": {{userId}},\n  \"role\": \"developer\"\n}"}}},
+				{"name": "Remove Member", "request": {"method": "DELETE", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/projects/{{projectId}}/members/{{userId}}", "host": ["{{baseUrl}}"], "path": ["projects","{{projectId}}","members","{{userId}}"]}}},
+						{"name": "Update Member Role", "request": {"method": "PUT", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"},{"key":"Content-Type","value":"application/json"}], "url": {"raw": "{{baseUrl}}/projects/{{projectId}}/members/{{userId}}/role", "host": ["{{baseUrl}}"], "path": ["projects","{{projectId}}","members","{{userId}}","role"]}, "body": {"mode":"raw","raw":"{\n  \"role\": \"manager\"\n}"}}},
+						{"name": "Update Member Role (compat)", "request": {"method": "PUT", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"},{"key":"Content-Type","value":"application/json"}], "url": {"raw": "{{baseUrl}}/projects/{{projectId}}/members/{{userId}}", "host": ["{{baseUrl}}"], "path": ["projects","{{projectId}}","members","{{userId}}"]}, "body": {"mode":"raw","raw":"{\n  \"role\": \"developer\"\n}"}}}
+			]
+		},
+		{
+			"name": "4 - Tasks",
+			"item": [
+				{"name": "List Tasks", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/tasks?limit=10&page=1", "host": ["{{baseUrl}}"], "path": ["tasks"], "query": [{"key":"limit","value":"10"},{"key":"page","value":"1"}]}}, "event": [{"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","const first = (json.data && json.data.tasks && json.data.tasks[0]) || null;","if(first && first.id) pm.environment.set('taskId', first.id);"]}}]},
+				{"name": "My Tasks", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/tasks/my", "host": ["{{baseUrl}}"], "path": ["tasks","my"]}}},
+				{"name": "Tasks by Project", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/tasks/project/{{projectId}}", "host": ["{{baseUrl}}"], "path": ["tasks","project","{{projectId}}"]}}},
+				{"name": "Create Task", "request": {"method": "POST", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"},{"key":"Content-Type","value":"application/json"}], "url": {"raw": "{{baseUrl}}/tasks", "host": ["{{baseUrl}}"], "path": ["tasks"]}, "body": {"mode":"raw","raw":"{\n  \"title\": \"Demo Task {{ $timestamp }}\",\n  \"projectId\": {{projectId}},\n  \"priority\": \"medium\"\n}"}}, "event": [{"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","if (json.data && json.data.id) pm.environment.set('taskId', json.data.id);"]}}]},
+				{"name": "Get Task By Id", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/tasks/{{taskId}}", "host": ["{{baseUrl}}"], "path": ["tasks","{{taskId}}"]}}},
+				{"name": "Update Task", "request": {"method": "PUT", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"},{"key":"Content-Type","value":"application/json"}], "url": {"raw": "{{baseUrl}}/tasks/{{taskId}}", "host": ["{{baseUrl}}"], "path": ["tasks","{{taskId}}"]}, "body": {"mode":"raw","raw":"{\n  \"status\": \"in_progress\"\n}"}}},
+				{"name": "Assign Task (compat)", "request": {"method": "PUT", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"},{"key":"Content-Type","value":"application/json"}], "url": {"raw": "{{baseUrl}}/tasks/{{taskId}}/assign", "host": ["{{baseUrl}}"], "path": ["tasks","{{taskId}}","assign"]}, "body": {"mode":"raw","raw":"{\n  \"assigneeId\": {{userId}}\n}"}}},
+				{"name": "Update Task Status (compat)", "request": {"method": "PUT", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"},{"key":"Content-Type","value":"application/json"}], "url": {"raw": "{{baseUrl}}/tasks/{{taskId}}/status", "host": ["{{baseUrl}}"], "path": ["tasks","{{taskId}}","status"]}, "body": {"mode":"raw","raw":"{\n  \"status\": \"review\"\n}"}}},
+				{"name": "Delete Task", "request": {"method": "DELETE", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/tasks/{{taskId}}", "host": ["{{baseUrl}}"], "path": ["tasks","{{taskId}}"]}}},
+				{"name": "Get Task Comments (compat)", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/tasks/{{taskId}}/comments", "host": ["{{baseUrl}}"], "path": ["tasks","{{taskId}}","comments"]}}},
+						{"name": "Add Comment to Task", "request": {"method": "POST", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"},{"key":"Content-Type","value":"application/json"}], "url": {"raw": "{{baseUrl}}/tasks/{{taskId}}/comments", "host": ["{{baseUrl}}"], "path": ["tasks","{{taskId}}","comments"]}, "body": {"mode":"raw","raw":"{\n  \"content\": \"This is a Postman comment\"\n}"}}},
+						{"name": "Update Comment (tasks route)", "request": {"method": "PUT", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"},{"key":"Content-Type","value":"application/json"}], "url": {"raw": "{{baseUrl}}/tasks/comments/{{commentId}}", "host": ["{{baseUrl}}"], "path": ["tasks","comments","{{commentId}}"]}, "body": {"mode":"raw","raw":"{\n  \"content\": \"Updated via tasks route\"\n}"}}},
+						{"name": "Delete Comment (tasks route)", "request": {"method": "DELETE", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/tasks/comments/{{commentId}}", "host": ["{{baseUrl}}"], "path": ["tasks","comments","{{commentId}}"]}}}
+			]
+		},
+		{
+			"name": "5 - Comments",
+			"item": [
+				{"name": "Create Comment", "request": {"method": "POST", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"},{"key":"Content-Type","value":"application/json"}], "url": {"raw": "{{baseUrl}}/comments", "host": ["{{baseUrl}}"], "path": ["comments"]}, "body": {"mode":"raw","raw":"{\n  \"taskId\": {{taskId}},\n  \"comment\": \"General comments API\"\n}"}}, "event": [{"listen":"test","script":{"type":"text/javascript","exec":["const json = pm.response.json();","if (json.data && json.data.id) pm.environment.set('commentId', json.data.id);"]}}]},
+				{"name": "Get Comments By Task", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/comments/task/{{taskId}}", "host": ["{{baseUrl}}"], "path": ["comments","task","{{taskId}}"]}}},
+				{"name": "Get Comment By Id", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/comments/{{commentId}}", "host": ["{{baseUrl}}"], "path": ["comments","{{commentId}}"]}}},
+				{"name": "Update Comment", "request": {"method": "PUT", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"},{"key":"Content-Type","value":"application/json"}], "url": {"raw": "{{baseUrl}}/comments/{{commentId}}", "host": ["{{baseUrl}}"], "path": ["comments","{{commentId}}"]}, "body": {"mode":"raw","raw":"{\n  \"comment\": \"Updated via Postman\"\n}"}}},
+				{"name": "Delete Comment", "request": {"method": "DELETE", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/comments/{{commentId}}", "host": ["{{baseUrl}}"], "path": ["comments","{{commentId}}"]}}}
+			]
+		},
+		{
+			"name": "6 - Activities",
+			"item": [
+				{"name": "List Activities", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/activities?limit=10&page=1", "host": ["{{baseUrl}}"], "path": ["activities"], "query": [{"key":"limit","value":"10"},{"key":"page","value":"1"}]}}},
+				{"name": "Get Activity By Id", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/activities/1", "host": ["{{baseUrl}}"], "path": ["activities","1"]}}},
+				{"name": "Entity Activities", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/activities/entity/task/{{taskId}}", "host": ["{{baseUrl}}"], "path": ["activities","entity","task","{{taskId}}"]}}},
+				{"name": "User Activities", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/activities/user/{{userId}}", "host": ["{{baseUrl}}"], "path": ["activities","user","{{userId}}"]}}},
+				{"name": "Cleanup Old Activities (admin)", "request": {"method": "DELETE", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/activities/cleanup?daysToKeep=90", "host": ["{{baseUrl}}"], "path": ["activities","cleanup"], "query": [{"key":"daysToKeep","value":"90"}]}}}
+			]
+		},
+		{
+			"name": "7 - Dashboard",
+			"item": [
+				{"name": "Overview", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/dashboard?dateRange={{dateRange}}", "host": ["{{baseUrl}}"], "path": ["dashboard"], "query": [{"key":"dateRange","value":"{{dateRange}}"}]}}},
+				{"name": "Team Performance", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/dashboard/team?dateRange={{dateRange}}", "host": ["{{baseUrl}}"], "path": ["dashboard","team"], "query": [{"key":"dateRange","value":"{{dateRange}}"}]}}},
+				{"name": "Analytics", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/dashboard/analytics?dateRange={{dateRange}}", "host": ["{{baseUrl}}"], "path": ["dashboard","analytics"], "query": [{"key":"dateRange","value":"{{dateRange}}"}]}}},
+				{"name": "User Dashboard", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/dashboard/user?dateRange={{dateRange}}", "host": ["{{baseUrl}}"], "path": ["dashboard","user"], "query": [{"key":"dateRange","value":"{{dateRange}}"}]}}},
+				{"name": "Project Stats", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/dashboard/project/{{projectId}}?dateRange={{dateRange}}", "host": ["{{baseUrl}}"], "path": ["dashboard","project","{{projectId}}"], "query": [{"key":"dateRange","value":"{{dateRange}}"}]}}},
+				{"name": "System Analytics (admin)", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/dashboard/system?dateRange={{dateRange}}", "host": ["{{baseUrl}}"], "path": ["dashboard","system"], "query": [{"key":"dateRange","value":"{{dateRange}}"}]}}},
+				{"name": "Export", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/dashboard/export?format=json&dateRange={{dateRange}}", "host": ["{{baseUrl}}"], "path": ["dashboard","export"], "query": [{"key":"format","value":"json"},{"key":"dateRange","value":"{{dateRange}}"}]}}},
+				{"name": "Time Analytics", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/dashboard/time-analytics?dateRange={{dateRange}}", "host": ["{{baseUrl}}"], "path": ["dashboard","time-analytics"], "query": [{"key":"dateRange","value":"{{dateRange}}"}]}}},
+				{"name": "Project Analytics", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/dashboard/project-analytics/{{projectId}}?dateRange={{dateRange}}", "host": ["{{baseUrl}}"], "path": ["dashboard","project-analytics","{{projectId}}"], "query": [{"key":"dateRange","value":"{{dateRange}}"}]}}},
+				{"name": "Team Productivity", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/dashboard/team-productivity?dateRange={{dateRange}}", "host": ["{{baseUrl}}"], "path": ["dashboard","team-productivity"], "query": [{"key":"dateRange","value":"{{dateRange}}"}]}}},
+				{"name": "Time Distribution", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/dashboard/time-distribution?dateRange={{dateRange}}", "host": ["{{baseUrl}}"], "path": ["dashboard","time-distribution"], "query": [{"key":"dateRange","value":"{{dateRange}}"}]}}},
+				{"name": "Analytics Summary", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/dashboard/analytics-summary?dateRange={{dateRange}}", "host": ["{{baseUrl}}"], "path": ["dashboard","analytics-summary"], "query": [{"key":"dateRange","value":"{{dateRange}}"}]}}}
+			]
+		},
+		{
+			"name": "8 - Search",
+			"item": [
+				{"name": "Unified Search", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/search?query=test&types=projects&types=tasks&limit=5", "host": ["{{baseUrl}}"], "path": ["search"], "query": [{"key":"query","value":"test"},{"key":"types","value":"projects"},{"key":"types","value":"tasks"},{"key":"limit","value":"5"}]}}},
+				{"name": "Search Projects", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/search/projects?query=demo&limit=5", "host": ["{{baseUrl}}"], "path": ["search","projects"], "query": [{"key":"query","value":"demo"},{"key":"limit","value":"5"}]}}},
+				{"name": "Search Tasks", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/search/tasks?query=bug&limit=5", "host": ["{{baseUrl}}"], "path": ["search","tasks"], "query": [{"key":"query","value":"bug"},{"key":"limit","value":"5"}]}}},
+				{"name": "Search Users", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/search/users?query=admin&limit=5", "host": ["{{baseUrl}}"], "path": ["search","users"], "query": [{"key":"query","value":"admin"},{"key":"limit","value":"5"}]}}},
+				{"name": "Search Comments", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/search/comments?query=task&limit=5", "host": ["{{baseUrl}}"], "path": ["search","comments"], "query": [{"key":"query","value":"task"},{"key":"limit","value":"5"}]}}},
+				{"name": "Suggestions", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/search/suggestions?query=pro", "host": ["{{baseUrl}}"], "path": ["search","suggestions"], "query": [{"key":"query","value":"pro"}]}}},
+				{"name": "Filter Options", "request": {"method": "GET", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"}], "url": {"raw": "{{baseUrl}}/search/filter-options", "host": ["{{baseUrl}}"], "path": ["search","filter-options"]}}},
+				{"name": "Advanced Search", "request": {"method": "POST", "header": [{"key":"Authorization","value":"Bearer {{accessToken}}"},{"key":"Content-Type","value":"application/json"}], "url": {"raw": "{{baseUrl}}/search/advanced", "host": ["{{baseUrl}}"], "path": ["search","advanced"]}, "body": {"mode":"raw","raw":"{\n  \"projects\": {\n    \"query\": \"mobile\",\n    \"filters\": { \"status\": \"active\" },\n    \"pagination\": { \"limit\": 5, \"offset\": 0 }\n  },\n  \"tasks\": {\n    \"query\": \"bug\",\n    \"filters\": { \"status\": \"in_progress\", \"priority\": \"high\" },\n    \"pagination\": { \"limit\": 10, \"offset\": 0 }\n  }\n}"}}}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Ensure Authorization header is set if accessToken exists",
+					"if (!pm.request.headers.has('Authorization')) {",
+					"  const t = pm.environment.get('accessToken');",
+					"  if (t) pm.request.headers.add({ key: 'Authorization', value: 'Bearer ' + t });",
+					"}"
+				]
+			}
+		}
+	]
+}
