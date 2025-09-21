@@ -1,5 +1,7 @@
 import database from '../config/database.js';
 import { config } from '../config/config.js';
+import { fileURLToPath } from 'url';
+import path from 'path';
 
 // Execute base migration file (001). Note: 002 contains TRIGGERs and DELIMITER directives
 // that are not compatible with naive splitting; tests and basic setup only require 001.
@@ -29,17 +31,29 @@ export const runMigrations = async () => {
     const __dirname = path.dirname(__filename);
     
     const migrationPath = path.join(__dirname, '../../database/migrations/001_create_database.sql');
-    let migrationSQL = fs.readFileSync(migrationPath, 'utf8');
+  let migrationSQL = fs.readFileSync(migrationPath, 'utf8');
 
     // Replace hardcoded DB name with configured DB name for current environment (e.g., tests)
     const targetDbName = config.database.name;
     migrationSQL = migrationSQL.replaceAll('project_management_tool', targetDbName);
     
+    // Helper: strip comments (line and block) for robust splitting
+    const stripSqlComments = (sql) => {
+      // Remove block comments /* ... */
+      let s = sql.replace(/\/\*[\s\S]*?\*\//g, '');
+      // Remove line comments starting with -- or #
+      s = s.replace(/^\s*--.*$/gm, '');
+      s = s.replace(/^\s*#.*$/gm, '');
+      return s;
+    };
+
+    migrationSQL = stripSqlComments(migrationSQL);
+
     // Split SQL file into individual statements
     const statements = migrationSQL
       .split(';')
       .map(statement => statement.trim())
-      .filter(statement => statement.length > 0 && !statement.startsWith('--'));
+      .filter(statement => statement.length > 0);
     
     // Execute each statement
     for (const statement of statements) {
@@ -229,8 +243,19 @@ export const runMigrations = async () => {
   }
 };
 
-// Run migrations if this file is executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Run migrations if this file is executed directly (robust cross-platform check)
+const __filename = fileURLToPath(import.meta.url);
+const isDirectRun = (() => {
+  try {
+    const invoked = process.argv[1] ? path.resolve(process.argv[1]) : '';
+    const current = path.resolve(__filename);
+    return invoked && invoked === current;
+  } catch {
+    return false;
+  }
+})();
+
+if (isDirectRun) {
   runMigrations()
     .then(() => {
   console.log('Migrations completed');

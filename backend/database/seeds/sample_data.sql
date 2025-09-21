@@ -11,7 +11,7 @@ INSERT INTO users (email, password_hash, first_name, last_name, role, is_active)
 ('mike.dev@example.com', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj1JQxNj8xzq', 'Mike', 'Developer', 'developer', TRUE),
 ('jane.dev@example.com', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj1JQxNj8xzq', 'Jane', 'Developer', 'developer', TRUE);
 
--- Note: The password hash above is for 'password123' - change this in production!
+-- Note: The hash above corresponds to an old default ('password123'). The seed script updates these to 'Password123' post-insert.
 
 -- Insert sample projects
 INSERT INTO projects (name, description, status, priority, start_date, end_date, created_by) VALUES
