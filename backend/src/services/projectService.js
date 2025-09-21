@@ -345,6 +345,25 @@ class ProjectService {
       throw error;
     }
   }
+
+  /**
+   * Get tasks for a project (compat for frontend)
+   */
+  async getProjectTasks(projectId, userId, userRole) {
+    try {
+      // Ensure access
+      const project = await this.getProjectById(projectId, userId, userRole);
+      if (!project) {
+        throw new Error('Project not found or access denied');
+      }
+
+      // Use Project model to fetch tasks
+      const tasks = await Project.getTasks(projectId);
+      return tasks;
+    } catch (error) {
+      throw error;
+    }
+  }
 }
 
 export default new ProjectService();

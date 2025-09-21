@@ -460,6 +460,21 @@ router.delete('/:id',
 );
 
 /**
+ * Compatibility endpoints used by frontend services
+ */
+router.get('/:id/members', 
+  authenticateToken,
+  projectIdValidation,
+  projectController.getProjectMembers
+);
+
+router.get('/:id/tasks',
+  authenticateToken,
+  projectIdValidation,
+  projectController.getProjectTasks
+);
+
+/**
  * @swagger
  * /api/projects/{id}/members:
  *   post:

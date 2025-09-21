@@ -62,4 +62,9 @@ router.get('/verify', authenticate, verifyToken);
 router.post('/send-verification', authenticate, sendEmailVerification);
 router.put('/update-profile', authenticate, updateProfile);
 
+// Compatibility aliases expected by some clients
+router.post('/forgot-password', authLimiter, requestPasswordReset);
+router.put('/profile', authenticate, updateProfile);
+router.post('/change-password', authenticate, validatePasswordUpdate, updatePassword);
+
 export default router;

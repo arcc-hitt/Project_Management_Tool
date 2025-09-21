@@ -291,6 +291,34 @@ class TaskController {
       res.status(500).json(formatErrorResponse('Failed to retrieve project tasks', error.message));
     }
   }
+
+  /**
+   * Get comments for a task (compat route)
+   */
+  async getTaskComments(req, res) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json(formatErrorResponse('Validation failed', errors.array()));
+      }
+
+      const { id } = req.params;
+      const { user } = req;
+
+      const comments = await taskService.getTaskComments(parseInt(id), user.id, user.role);
+
+      return res.status(200).json(formatApiResponse(comments, 'Task comments retrieved successfully'));
+    } catch (error) {
+      console.error('Get task comments error:', error);
+      if (error.message === 'Task not found') {
+        return res.status(404).json(formatErrorResponse('Task not found'));
+      }
+      if (error.message && error.message.includes('Access denied')) {
+        return res.status(403).json(formatErrorResponse('Access denied to this task'));
+      }
+      return res.status(500).json(formatErrorResponse('Failed to retrieve task comments', error.message));
+    }
+  }
 }
 
 export default new TaskController();

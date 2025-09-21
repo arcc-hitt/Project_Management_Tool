@@ -381,6 +381,35 @@ class TaskService {
       throw error;
     }
   }
+
+  /**
+   * Get comments for a task (compat route)
+   * @param {number} taskId - Task ID
+   * @param {number} userId - Current user ID
+   * @param {string} userRole - Current user role
+   * @returns {array} Task comments
+   */
+  async getTaskComments(taskId, userId, userRole) {
+    try {
+      // Ensure task exists
+      const existing = await Task.findById(taskId);
+      if (!existing) {
+        throw new Error('Task not found');
+      }
+
+      // Access control for developers
+      if (userRole === 'developer') {
+        const hasAccess = await Task.hasUserAccess(taskId, userId);
+        if (!hasAccess) {
+          throw new Error('Access denied to this task');
+        }
+      }
+
+      return await Comment.findByTaskId(taskId, { orderDir: 'ASC' });
+    } catch (error) {
+      throw error;
+    }
+  }
 }
 
 export default new TaskService();
