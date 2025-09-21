@@ -1,6 +1,8 @@
 import React from 'react';
-import { Bell, Menu } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import { Button } from '../ui/button';
+import NotificationsDropdown from '../features/NotificationsDropdown';
+import OnlineUsersIndicator from '../features/OnlineUsersIndicator';
 
 export const Header: React.FC = () => {
   return (
@@ -18,10 +20,11 @@ export const Header: React.FC = () => {
         
         {/* Right side */}
         <div className="flex items-center space-x-4">
+          {/* Online Users */}
+          <OnlineUsersIndicator />
+          
           {/* Notifications */}
-          <Button variant="ghost" size="sm">
-            <Bell className="h-5 w-5" />
-          </Button>
+          <NotificationsDropdown />
         </div>
       </div>
     </header>
