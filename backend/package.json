@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "test": "jest",
+  "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand",
     "test:watch": "jest --watch",
     "migrate": "node src/scripts/migrate.js",
     "seed": "node src/scripts/seed.js",
@@ -48,14 +48,13 @@
     "supertest": "^7.1.4"
   },
   "jest": {
-    "type": "module",
     "testEnvironment": "node",
     "transform": {},
-    "extensionsToTreatAsEsm": [
-      ".js"
+    "setupFilesAfterEnv": [
+      "<rootDir>/tests/setup.js"
     ],
     "testMatch": [
-      "**/tests/**/*.test.js"
+      "**/tests/**/*.test.mjs"
     ]
   }
 }
