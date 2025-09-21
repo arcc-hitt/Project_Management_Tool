@@ -347,6 +347,13 @@ router.get('/project/:projectId',
   taskController.getTasksByProject
 );
 
+// Compatibility route expected by some clients: GET /api/tasks/:id/comments
+router.get('/:id/comments',
+  authenticateToken,
+  taskIdValidation,
+  taskController.getTaskComments
+);
+
 /**
  * @swagger
  * /api/tasks/{id}:
@@ -496,6 +503,32 @@ router.put('/:id',
   authenticateToken, 
   updateTaskValidation, 
   taskController.updateTask
+);
+
+// Compatibility: assign a task to a user via /api/tasks/:id/assign with { assigneeId }
+router.put('/:id/assign',
+  authenticateToken,
+  async (req, res, next) => {
+    // Map assigneeId -> assignedTo then call the regular update flow
+    if (req.body && req.body.assigneeId && !req.body.assignedTo) {
+      req.body.assignedTo = req.body.assigneeId;
+      delete req.body.assigneeId;
+    }
+    return taskController.updateTask(req, res, next);
+  }
+);
+
+// Compatibility: update task status via /api/tasks/:id/status with { status }
+router.put('/:id/status',
+  authenticateToken,
+  // normalize status for compatibility before validation inside controller
+  async (req, res, next) => {
+    // Normalize 'review' -> 'in_review' to match backend enum
+    if (req.body && req.body.status === 'review') {
+      req.body.status = 'in_review';
+    }
+    return taskController.updateTask(req, res, next);
+  }
 );
 
 /**

@@ -138,8 +138,14 @@ export const register = asyncHandler(async (req, res) => {
   try {
     const result = await authService.register(req.body);
     
-    // Maintain legacy shape: data.token for compatibility
-    const responseData = { user: result.user, token: result.accessToken };
+    // Include both modern and legacy fields for compatibility with frontend and tests
+    const responseData = {
+      user: result.user,
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      // legacy field used by some tests/clients
+      token: result.accessToken,
+    };
     return sendSuccess(
       res, 
       'User registered successfully', 
@@ -183,7 +189,13 @@ export const login = asyncHandler(async (req, res) => {
     const { email, password } = req.body;
     const result = await authService.login(email, password);
     
-    const responseData = { user: result.user, token: result.accessToken };
+    const responseData = {
+      user: result.user,
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      // legacy field for compatibility
+      token: result.accessToken,
+    };
     return sendSuccess(res, 'Login successful', responseData);
   } catch (error) {
     if (error.message.includes('Invalid email or password') || 

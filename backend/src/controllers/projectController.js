@@ -290,6 +290,58 @@ class ProjectController {
       res.status(500).json(formatErrorResponse('Failed to retrieve user projects', error.message));
     }
   }
+
+  /**
+   * Get project members (compat for frontend)
+   */
+  async getProjectMembers(req, res) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json(formatErrorResponse('Validation failed', errors.array()));
+      }
+
+      const { id } = req.params;
+      const { user } = req;
+
+      const project = await projectService.getProjectById(parseInt(id), user.id, user.role);
+      if (!project) {
+        return res.status(404).json(formatErrorResponse('Project not found'));
+      }
+
+      const members = project.teamMembers || [];
+      return res.status(200).json(formatApiResponse(members, 'Project members retrieved successfully'));
+    } catch (error) {
+      console.error('Get project members error:', error);
+      if (error.message && error.message.includes('Access denied')) {
+        return res.status(403).json(formatErrorResponse(error.message));
+      }
+      return res.status(500).json(formatErrorResponse('Failed to retrieve project members', error.message));
+    }
+  }
+
+  /**
+   * Get project tasks (compat for frontend)
+   */
+  async getProjectTasks(req, res) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json(formatErrorResponse('Validation failed', errors.array()));
+      }
+
+      const { id } = req.params;
+      const { user } = req;
+      const tasks = await projectService.getProjectTasks(parseInt(id), user.id, user.role);
+      return res.status(200).json(formatApiResponse(tasks, 'Project tasks retrieved successfully'));
+    } catch (error) {
+      console.error('Get project tasks error:', error);
+      if (error.message && error.message.includes('Access denied')) {
+        return res.status(403).json(formatErrorResponse(error.message));
+      }
+      return res.status(500).json(formatErrorResponse('Failed to retrieve project tasks', error.message));
+    }
+  }
 }
 
 export default new ProjectController();
