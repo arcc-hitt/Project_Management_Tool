@@ -55,9 +55,8 @@ project-management-tool/
 │   │   ├── utils/          # Utilities
 │   │   └── types/          # TypeScript types
 │   └── public/             # Static assets
-├── database/               # Database scripts
-│   ├── migrations/         # SQL migrations
-│   └── seeds/             # Sample data
+├── database/               # Database (managed by programmatic migrations)
+│   └── migrations/         # Base SQL for initial schema (consumed by migrate.js)
 └── docs/                  # Project documentation
     ├── api/               # API documentation
     └── er-diagram/        # Database design
@@ -96,12 +95,14 @@ project-management-tool/
 
 4. **Database Setup**
    ```bash
-   # Create MySQL database
+   # Create MySQL database (first time only)
    mysql -u root -p -e "CREATE DATABASE project_management_tool;"
-   
-   # Run migrations
+
+   # Apply programmatic migrations (recommended)
    cd backend
    npm run migrate
+
+   # Optional: seed data (no-op if seed file is absent)
    npm run seed
    ```
 

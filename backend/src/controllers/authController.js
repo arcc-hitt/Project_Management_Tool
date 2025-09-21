@@ -138,10 +138,12 @@ export const register = asyncHandler(async (req, res) => {
   try {
     const result = await authService.register(req.body);
     
+    // Maintain legacy shape: data.token for compatibility
+    const responseData = { user: result.user, token: result.accessToken };
     return sendSuccess(
       res, 
       'User registered successfully', 
-      result, 
+      responseData, 
       201
     );
   } catch (error) {
@@ -181,7 +183,8 @@ export const login = asyncHandler(async (req, res) => {
     const { email, password } = req.body;
     const result = await authService.login(email, password);
     
-    return sendSuccess(res, 'Login successful', result);
+    const responseData = { user: result.user, token: result.accessToken };
+    return sendSuccess(res, 'Login successful', responseData);
   } catch (error) {
     if (error.message.includes('Invalid email or password') || 
         error.message.includes('Account is deactivated')) {

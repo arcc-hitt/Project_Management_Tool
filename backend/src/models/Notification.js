@@ -17,7 +17,7 @@ class Notification {
   static async create(notificationData) {
     try {
       const query = `
-        INSERT INTO notifications (userId, type, title, message, entityType, entityId, isRead, createdAt)
+        INSERT INTO notifications (user_id, type, title, message, entity_type, entity_id, is_read, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
       `;
       
@@ -31,7 +31,7 @@ class Notification {
         notificationData.isRead || false
       ];
 
-      const [result] = await database.query(query, values);
+      const result = await database.query(query, values);
       
       // Fetch and return the created notification
       return await Notification.findById(result.insertId);
@@ -44,14 +44,14 @@ class Notification {
     try {
       const query = `
         SELECT n.*, 
-               CONCAT(u.firstName, ' ', u.lastName) as userName,
+               CONCAT(u.first_name, ' ', u.last_name) as userName,
                u.email as userEmail
         FROM notifications n
-        INNER JOIN users u ON n.userId = u.id
+        INNER JOIN users u ON n.user_id = u.id
         WHERE n.id = ?
       `;
       
-      const [rows] = await database.query(query, [id]);
+      const rows = await database.query(query, [id]);
       
       if (rows.length === 0) {
         return null;
@@ -66,29 +66,16 @@ class Notification {
   static async findByUser(userId, options = {}) {
     try {
       let query = `
-        SELECT n.*,
-               CASE 
-                 WHEN n.entityType = 'task' THEN t.title
-                 WHEN n.entityType = 'project' THEN p.name
-                 ELSE NULL
-               END as entityName,
-               CASE 
-                 WHEN n.entityType = 'task' THEN p2.name
-                 WHEN n.entityType = 'project' THEN p.name
-                 ELSE NULL
-               END as projectName
+        SELECT n.*
         FROM notifications n
-        LEFT JOIN tasks t ON n.entityType = 'task' AND n.entityId = t.id
-        LEFT JOIN projects p ON n.entityType = 'project' AND n.entityId = p.id
-        LEFT JOIN projects p2 ON n.entityType = 'task' AND t.projectId = p2.id
-        WHERE n.userId = ?
+        WHERE n.user_id = ?
       `;
       
       const values = [userId];
 
       // Add filtering options
       if (options.isRead !== undefined) {
-        query += ' AND n.isRead = ?';
+        query += ' AND n.is_read = ?';
         values.push(options.isRead);
       }
 
@@ -97,19 +84,20 @@ class Notification {
         values.push(options.type);
       }
 
+      // entityType filter retained if entity_type column exists
       if (options.entityType) {
-        query += ' AND n.entityType = ?';
+        query += ' AND n.entity_type = ?';
         values.push(options.entityType);
       }
 
       // Add date filter
       if (options.since) {
-        query += ' AND n.createdAt >= ?';
+        query += ' AND n.created_at >= ?';
         values.push(options.since);
       }
 
       // Add ordering
-      query += ' ORDER BY n.createdAt DESC';
+  query += ' ORDER BY n.created_at DESC';
 
       // Add pagination
       if (options.limit) {
@@ -122,7 +110,7 @@ class Notification {
         }
       }
 
-      const [rows] = await database.query(query, values);
+  const rows = await database.query(query, values);
       return rows.map(row => new Notification(row));
     } catch (error) {
       throw new Error(`Error finding notifications by user: ${error.message}`);
@@ -133,17 +121,10 @@ class Notification {
     try {
       let query = `
         SELECT n.*, 
-               CONCAT(u.firstName, ' ', u.lastName) as userName,
-               u.email as userEmail,
-               CASE 
-                 WHEN n.entityType = 'task' THEN t.title
-                 WHEN n.entityType = 'project' THEN p.name
-                 ELSE NULL
-               END as entityName
+               CONCAT(u.first_name, ' ', u.last_name) as userName,
+               u.email as userEmail
         FROM notifications n
-        INNER JOIN users u ON n.userId = u.id
-        LEFT JOIN tasks t ON n.entityType = 'task' AND n.entityId = t.id
-        LEFT JOIN projects p ON n.entityType = 'project' AND n.entityId = p.id
+        INNER JOIN users u ON n.user_id = u.id
         WHERE 1=1
       `;
       
@@ -151,7 +132,7 @@ class Notification {
 
       // Add filtering options
       if (options.userId) {
-        query += ' AND n.userId = ?';
+        query += ' AND n.user_id = ?';
         values.push(options.userId);
       }
 
@@ -161,12 +142,12 @@ class Notification {
       }
 
       if (options.isRead !== undefined) {
-        query += ' AND n.isRead = ?';
+        query += ' AND n.is_read = ?';
         values.push(options.isRead);
       }
 
       // Add ordering
-      query += ' ORDER BY n.createdAt DESC';
+  query += ' ORDER BY n.created_at DESC';
 
       // Add pagination
       if (options.limit) {
@@ -179,7 +160,7 @@ class Notification {
         }
       }
 
-      const [rows] = await database.query(query, values);
+  const rows = await database.query(query, values);
       return rows.map(row => new Notification(row));
     } catch (error) {
       throw new Error(`Error finding notifications: ${error.message}`);
@@ -192,12 +173,12 @@ class Notification {
       const values = [];
 
       if (options.userId) {
-        query += ' AND userId = ?';
+        query += ' AND user_id = ?';
         values.push(options.userId);
       }
 
       if (options.isRead !== undefined) {
-        query += ' AND isRead = ?';
+        query += ' AND is_read = ?';
         values.push(options.isRead);
       }
 
@@ -206,7 +187,7 @@ class Notification {
         values.push(options.type);
       }
 
-      const [rows] = await database.query(query, values);
+  const rows = await database.query(query, values);
       return rows[0].total;
     } catch (error) {
       throw new Error(`Error counting notifications: ${error.message}`);
@@ -215,8 +196,8 @@ class Notification {
 
   static async markAsRead(id) {
     try {
-      const query = 'UPDATE notifications SET isRead = TRUE WHERE id = ?';
-      const [result] = await database.query(query, [id]);
+  const query = 'UPDATE notifications SET is_read = TRUE WHERE id = ?';
+  const result = await database.query(query, [id]);
       
       return result.affectedRows > 0;
     } catch (error) {
@@ -226,8 +207,8 @@ class Notification {
 
   static async markAllAsRead(userId) {
     try {
-      const query = 'UPDATE notifications SET isRead = TRUE WHERE userId = ? AND isRead = FALSE';
-      const [result] = await database.query(query, [userId]);
+  const query = 'UPDATE notifications SET is_read = TRUE WHERE user_id = ? AND is_read = FALSE';
+  const result = await database.query(query, [userId]);
       
       return result.affectedRows;
     } catch (error) {
@@ -237,8 +218,8 @@ class Notification {
 
   static async delete(id) {
     try {
-      const query = 'DELETE FROM notifications WHERE id = ?';
-      const [result] = await database.query(query, [id]);
+  const query = 'DELETE FROM notifications WHERE id = ?';
+  const result = await database.query(query, [id]);
       
       return result.affectedRows > 0;
     } catch (error) {
@@ -248,8 +229,8 @@ class Notification {
 
   static async deleteOld(days = 30) {
     try {
-      const query = 'DELETE FROM notifications WHERE createdAt < DATE_SUB(NOW(), INTERVAL ? DAY)';
-      const [result] = await database.query(query, [days]);
+  const query = 'DELETE FROM notifications WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)';
+  const result = await database.query(query, [days]);
       
       return result.affectedRows;
     } catch (error) {
@@ -261,8 +242,8 @@ class Notification {
   static async createTaskAssigned(taskId, assigneeId, assignerId) {
     try {
       // Get task details
-      const taskQuery = 'SELECT title, projectId FROM tasks WHERE id = ?';
-      const [taskRows] = await database.query(taskQuery, [taskId]);
+  const taskQuery = 'SELECT title, project_id FROM tasks WHERE id = ?';
+  const taskRows = await database.query(taskQuery, [taskId]);
       
       if (taskRows.length === 0) {
         throw new Error('Task not found');
@@ -271,11 +252,11 @@ class Notification {
       const task = taskRows[0];
 
       // Get assigner name
-      const userQuery = 'SELECT firstName, lastName FROM users WHERE id = ?';
-      const [userRows] = await database.query(userQuery, [assignerId]);
+  const userQuery = 'SELECT first_name, last_name FROM users WHERE id = ?';
+  const userRows = await database.query(userQuery, [assignerId]);
       
       const assignerName = userRows.length > 0 
-        ? `${userRows[0].firstName} ${userRows[0].lastName}` 
+  ? `${userRows[0].first_name} ${userRows[0].last_name}` 
         : 'Someone';
 
       return await Notification.create({
@@ -299,7 +280,7 @@ class Notification {
         FROM tasks 
         WHERE id = ?
       `;
-      const [taskRows] = await database.query(taskQuery, [taskId]);
+  const taskRows = await database.query(taskQuery, [taskId]);
       
       if (taskRows.length === 0 || !taskRows[0].assignedTo) {
         return null;
@@ -313,11 +294,11 @@ class Notification {
       }
 
       // Get updater name
-      const userQuery = 'SELECT firstName, lastName FROM users WHERE id = ?';
-      const [userRows] = await database.query(userQuery, [updaterId]);
+  const userQuery = 'SELECT first_name, last_name FROM users WHERE id = ?';
+  const userRows = await database.query(userQuery, [updaterId]);
       
       const updaterName = userRows.length > 0 
-        ? `${userRows[0].firstName} ${userRows[0].lastName}` 
+  ? `${userRows[0].first_name} ${userRows[0].last_name}` 
         : 'Someone';
 
       const changeDescription = Object.keys(changes).join(', ');
@@ -339,13 +320,13 @@ class Notification {
     try {
       // Get task details and project members
       const taskQuery = `
-        SELECT t.title, t.projectId, t.createdBy, t.assignedTo,
+        SELECT t.title, t.project_id, t.created_by, t.assigned_to,
                p.name as projectName
         FROM tasks t
-        INNER JOIN projects p ON t.projectId = p.id
+        INNER JOIN projects p ON t.project_id = p.id
         WHERE t.id = ?
       `;
-      const [taskRows] = await database.query(taskQuery, [taskId]);
+      const taskRows = await database.query(taskQuery, [taskId]);
       
       if (taskRows.length === 0) {
         return [];
@@ -357,19 +338,19 @@ class Notification {
       const membersQuery = `
         SELECT DISTINCT u.id
         FROM project_members pm
-        INNER JOIN users u ON pm.userId = u.id
-        WHERE pm.projectId = ? 
-        AND pm.role IN ('project_manager') 
+        INNER JOIN users u ON pm.user_id = u.id
+        WHERE pm.project_id = ? 
+        AND pm.role IN ('manager') 
         AND u.id != ?
       `;
-      const [memberRows] = await database.query(membersQuery, [task.projectId, completerId]);
+      const memberRows = await database.query(membersQuery, [task.project_id, completerId]);
 
       // Get completer name
-      const userQuery = 'SELECT firstName, lastName FROM users WHERE id = ?';
-      const [userRows] = await database.query(userQuery, [completerId]);
+  const userQuery = 'SELECT first_name, last_name FROM users WHERE id = ?';
+  const userRows = await database.query(userQuery, [completerId]);
       
       const completerName = userRows.length > 0 
-        ? `${userRows[0].firstName} ${userRows[0].lastName}` 
+  ? `${userRows[0].first_name} ${userRows[0].last_name}` 
         : 'Someone';
 
       const notifications = [];
@@ -388,9 +369,9 @@ class Notification {
       }
 
       // Notify task creator if different from completer and not already notified
-      if (task.createdBy !== completerId && !memberRows.some(m => m.id === task.createdBy)) {
+      if (task.created_by !== completerId && !memberRows.some(m => m.id === task.created_by)) {
         const notification = await Notification.create({
-          userId: task.createdBy,
+          userId: task.created_by,
           type: 'task_completed',
           title: 'Task Completed',
           message: `${completerName} completed the task: "${task.title}"`,
@@ -410,11 +391,11 @@ class Notification {
     try {
       // Get task details
       const taskQuery = `
-        SELECT t.title, t.assignedTo, t.createdBy, t.projectId
+        SELECT t.title, t.assigned_to, t.created_by, t.project_id
         FROM tasks t
         WHERE t.id = ?
       `;
-      const [taskRows] = await database.query(taskQuery, [taskId]);
+      const taskRows = await database.query(taskQuery, [taskId]);
       
       if (taskRows.length === 0) {
         return [];
@@ -423,20 +404,20 @@ class Notification {
       const task = taskRows[0];
 
       // Get commenter name
-      const userQuery = 'SELECT firstName, lastName FROM users WHERE id = ?';
-      const [userRows] = await database.query(userQuery, [commenterId]);
+  const userQuery = 'SELECT first_name, last_name FROM users WHERE id = ?';
+  const userRows = await database.query(userQuery, [commenterId]);
       
       const commenterName = userRows.length > 0 
-        ? `${userRows[0].firstName} ${userRows[0].lastName}` 
+  ? `${userRows[0].first_name} ${userRows[0].last_name}` 
         : 'Someone';
 
       const notifications = [];
       const notifiedUsers = new Set([commenterId]);
 
       // Notify assignee
-      if (task.assignedTo && !notifiedUsers.has(task.assignedTo)) {
+      if (task.assigned_to && !notifiedUsers.has(task.assigned_to)) {
         const notification = await Notification.create({
-          userId: task.assignedTo,
+          userId: task.assigned_to,
           type: 'comment_added',
           title: 'New Comment',
           message: `${commenterName} commented on the task: "${task.title}"`,
@@ -444,13 +425,13 @@ class Notification {
           entityId: taskId
         });
         notifications.push(notification);
-        notifiedUsers.add(task.assignedTo);
+        notifiedUsers.add(task.assigned_to);
       }
 
       // Notify task creator
-      if (task.createdBy && !notifiedUsers.has(task.createdBy)) {
+      if (task.created_by && !notifiedUsers.has(task.created_by)) {
         const notification = await Notification.create({
-          userId: task.createdBy,
+          userId: task.created_by,
           type: 'comment_added',
           title: 'New Comment',
           message: `${commenterName} commented on the task: "${task.title}"`,
@@ -458,7 +439,7 @@ class Notification {
           entityId: taskId
         });
         notifications.push(notification);
-        notifiedUsers.add(task.createdBy);
+        notifiedUsers.add(task.created_by);
       }
 
       return notifications;
@@ -471,18 +452,18 @@ class Notification {
     try {
       // Get task details
       const taskQuery = `
-        SELECT title, assignedTo, dueDate
+        SELECT title, assigned_to, due_date
         FROM tasks 
-        WHERE id = ? AND assignedTo IS NOT NULL
+        WHERE id = ? AND assigned_to IS NOT NULL
       `;
-      const [taskRows] = await database.query(taskQuery, [taskId]);
+      const taskRows = await database.query(taskQuery, [taskId]);
       
       if (taskRows.length === 0) {
         return null;
       }
 
-      const task = taskRows[0];
-      const dueDate = new Date(task.dueDate);
+  const task = taskRows[0];
+  const dueDate = new Date(task.due_date);
       const now = new Date();
       const daysUntilDue = Math.ceil((dueDate - now) / (1000 * 60 * 60 * 24));
 
@@ -496,7 +477,7 @@ class Notification {
       }
 
       return await Notification.create({
-        userId: task.assignedTo,
+        userId: task.assigned_to,
         type: 'deadline_reminder',
         title: 'Deadline Reminder',
         message,

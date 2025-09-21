@@ -17,31 +17,21 @@ class TimeEntry {
   // Static methods for database operations
   static async create(timeEntryData) {
     try {
-      // Calculate duration if start and end times are provided
-      let duration = timeEntryData.duration;
-      if (!duration && timeEntryData.startTime && timeEntryData.endTime) {
-        const start = new Date(timeEntryData.startTime);
-        const end = new Date(timeEntryData.endTime);
-        duration = Math.round((end - start) / (1000 * 60)); // duration in minutes
-      }
-
       const query = `
-        INSERT INTO time_entries (task_id, user_id, description, start_time, end_time, 
-                                 duration, billable, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        INSERT INTO time_entries (task_id, user_id, description, hours_spent, start_time, end_time, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, NOW())
       `;
       
       const values = [
         timeEntryData.taskId,
         timeEntryData.userId,
         timeEntryData.description || null,
+        timeEntryData.hoursSpent || timeEntryData.hours_spent || 0,
         timeEntryData.startTime ? formatDateForDB(timeEntryData.startTime) : null,
-        timeEntryData.endTime ? formatDateForDB(timeEntryData.endTime) : null,
-        duration || 0,
-        timeEntryData.billable !== undefined ? timeEntryData.billable : true
+        timeEntryData.endTime ? formatDateForDB(timeEntryData.endTime) : null
       ];
 
-      const [result] = await database.query(query, values);
+      const result = await database.query(query, values);
       
       // Fetch and return the created time entry
       return await TimeEntry.findById(result.insertId);
@@ -54,20 +44,20 @@ class TimeEntry {
     try {
       const query = `
         SELECT te.*, 
-               CONCAT(u.firstName, ' ', u.lastName) as userName,
+               CONCAT(u.first_name, ' ', u.last_name) as userName,
                u.email as userEmail,
-               u.avatar as userAvatar,
+               u.avatar_url as userAvatar,
                t.title as taskTitle,
                p.name as projectName,
                p.id as projectId
         FROM time_entries te
         INNER JOIN users u ON te.user_id = u.id
         INNER JOIN tasks t ON te.task_id = t.id
-        INNER JOIN projects p ON t.projectId = p.id
+        INNER JOIN projects p ON t.project_id = p.id
         WHERE te.id = ?
       `;
       
-      const [rows] = await database.query(query, [id]);
+      const rows = await database.query(query, [id]);
       
       if (rows.length === 0) {
         return null;
@@ -79,12 +69,11 @@ class TimeEntry {
         taskId: data.task_id,
         userId: data.user_id,
         description: data.description,
-        startTime: data.start_time,
-        endTime: data.end_time,
-        duration: data.duration,
-        billable: data.billable,
+  startTime: data.start_time,
+  endTime: data.end_time,
+  hoursSpent: data.hours_spent,
         createdAt: data.created_at,
-        updatedAt: data.updated_at,
+  updatedAt: data.updated_at,
         userName: data.userName,
         userEmail: data.userEmail,
         userAvatar: data.userAvatar,
@@ -101,16 +90,16 @@ class TimeEntry {
     try {
       let query = `
         SELECT te.*, 
-               CONCAT(u.firstName, ' ', u.lastName) as userName,
-               u.email as userEmail,
-               u.avatar as userAvatar,
+     CONCAT(u.first_name, ' ', u.last_name) as userName,
+     u.email as userEmail,
+     u.avatar_url as userAvatar,
                t.title as taskTitle,
                p.name as projectName,
                p.id as projectId
         FROM time_entries te
-        INNER JOIN users u ON te.user_id = u.id
-        INNER JOIN tasks t ON te.task_id = t.id
-        INNER JOIN projects p ON t.projectId = p.id
+   INNER JOIN users u ON te.user_id = u.id
+   INNER JOIN tasks t ON te.task_id = t.id
+   INNER JOIN projects p ON t.project_id = p.id
         WHERE 1=1
       `;
       
@@ -130,11 +119,6 @@ class TimeEntry {
       if (filters.projectId) {
         query += ` AND p.id = ?`;
         values.push(filters.projectId);
-      }
-      
-      if (filters.billable !== undefined) {
-        query += ` AND te.billable = ?`;
-        values.push(filters.billable);
       }
       
       if (filters.dateFrom) {
@@ -169,7 +153,7 @@ class TimeEntry {
         }
       }
       
-      const [rows] = await database.query(query, values);
+  const rows = await database.query(query, values);
       
       return rows.map(data => new TimeEntry({
         id: data.id,
@@ -178,8 +162,7 @@ class TimeEntry {
         description: data.description,
         startTime: data.start_time,
         endTime: data.end_time,
-        duration: data.duration,
-        billable: data.billable,
+  hoursSpent: data.hours_spent,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
         userName: data.userName,
@@ -227,7 +210,7 @@ class TimeEntry {
         SELECT COUNT(*) as total
         FROM time_entries te
         INNER JOIN tasks t ON te.task_id = t.id
-        INNER JOIN projects p ON t.projectId = p.id
+        INNER JOIN projects p ON t.project_id = p.id
         WHERE 1=1
       `;
       
@@ -249,11 +232,6 @@ class TimeEntry {
         values.push(filters.projectId);
       }
       
-      if (filters.billable !== undefined) {
-        query += ` AND te.billable = ?`;
-        values.push(filters.billable);
-      }
-      
       if (filters.dateFrom) {
         query += ` AND DATE(te.start_time) >= ?`;
         values.push(filters.dateFrom);
@@ -270,7 +248,7 @@ class TimeEntry {
         values.push(searchTerm, searchTerm, searchTerm);
       }
       
-      const [rows] = await database.query(query, values);
+  const rows = await database.query(query, values);
       return rows[0].total;
     } catch (error) {
       throw new Error(`Error counting time entries: ${error.message}`);
@@ -279,34 +257,19 @@ class TimeEntry {
 
   static async update(id, updateData) {
     try {
-      // Recalculate duration if start and end times are being updated
-      if (updateData.startTime || updateData.endTime) {
-        const existing = await TimeEntry.findById(id);
-        if (!existing) {
-          throw new Error('Time entry not found');
-        }
-        
-        const startTime = updateData.startTime || existing.startTime;
-        const endTime = updateData.endTime || existing.endTime;
-        
-        if (startTime && endTime) {
-          const start = new Date(startTime);
-          const end = new Date(endTime);
-          updateData.duration = Math.round((end - start) / (1000 * 60));
-        }
-      }
-
       // Build dynamic update query
       const fields = [];
       const values = [];
       
       Object.keys(updateData).forEach(key => {
         if (updateData[key] !== undefined && key !== 'id') {
-          fields.push(`${key === 'taskId' ? 'task_id' : 
-                          key === 'userId' ? 'user_id' :
-                          key === 'startTime' ? 'start_time' :
-                          key === 'endTime' ? 'end_time' : key} = ?`);
-          
+          const column = key === 'taskId' ? 'task_id' :
+                         key === 'userId' ? 'user_id' :
+                         key === 'hoursSpent' ? 'hours_spent' :
+                         key === 'startTime' ? 'start_time' :
+                         key === 'endTime' ? 'end_time' : key;
+          fields.push(`${column} = ?`);
+
           if (key === 'startTime' || key === 'endTime') {
             values.push(formatDateForDB(updateData[key]));
           } else {
@@ -320,7 +283,7 @@ class TimeEntry {
       }
       
       // Add updated timestamp
-      fields.push('updated_at = NOW()');
+  fields.push('updated_at = NOW()');
       values.push(id);
       
       const query = `UPDATE time_entries SET ${fields.join(', ')} WHERE id = ?`;
@@ -335,7 +298,7 @@ class TimeEntry {
   static async delete(id) {
     try {
       const query = 'DELETE FROM time_entries WHERE id = ?';
-      const [result] = await database.query(query, [id]);
+  const result = await database.query(query, [id]);
       return result.affectedRows > 0;
     } catch (error) {
       throw new Error(`Error deleting time entry: ${error.message}`);
@@ -347,12 +310,11 @@ class TimeEntry {
     try {
       let query = `
         SELECT 
-          SUM(te.duration) as totalMinutes,
-          SUM(CASE WHEN te.billable = true THEN te.duration ELSE 0 END) as billableMinutes,
+          SUM(te.hours_spent) as totalHours,
           COUNT(*) as totalEntries
         FROM time_entries te
         INNER JOIN tasks t ON te.task_id = t.id
-        INNER JOIN projects p ON t.projectId = p.id
+        INNER JOIN projects p ON t.project_id = p.id
         WHERE 1=1
       `;
       
@@ -384,12 +346,11 @@ class TimeEntry {
         values.push(filters.dateTo);
       }
       
-      const [rows] = await database.query(query, values);
+      const rows = await database.query(query, values);
       const result = rows[0];
       
       return {
-        totalHours: Math.round((result.totalMinutes || 0) / 60 * 100) / 100,
-        billableHours: Math.round((result.billableMinutes || 0) / 60 * 100) / 100,
+        totalHours: Number(result.totalHours || 0),
         totalEntries: result.totalEntries || 0
       };
     } catch (error) {
@@ -399,24 +360,45 @@ class TimeEntry {
 
   static async getTimeReport(filters = {}) {
     try {
-      let query = `
-        SELECT 
-          p.id as projectId,
-          p.name as projectName,
-          t.id as taskId,
-          t.title as taskTitle,
-          u.id as userId,
-          CONCAT(u.firstName, ' ', u.lastName) as userName,
-          SUM(te.duration) as totalMinutes,
-          SUM(CASE WHEN te.billable = true THEN te.duration ELSE 0 END) as billableMinutes,
-          COUNT(te.id) as entryCount,
-          DATE(te.start_time) as workDate
+      // Build base joins
+      let baseJoin = `
         FROM time_entries te
         INNER JOIN tasks t ON te.task_id = t.id
-        INNER JOIN projects p ON t.projectId = p.id
+        INNER JOIN projects p ON t.project_id = p.id
         INNER JOIN users u ON te.user_id = u.id
-        WHERE 1=1
-      `;
+        WHERE 1=1`;
+
+      // Determine grouping and select accordingly to satisfy ONLY_FULL_GROUP_BY
+      const groupBy = filters.groupBy || 'date';
+      let select = '';
+      let groupClause = '';
+      let orderClause = '';
+
+      switch (groupBy) {
+        case 'user':
+          select = `SELECT u.id as userId, CONCAT(u.first_name, ' ', u.last_name) as userName, p.id as projectId, p.name as projectName, t.id as taskId, t.title as taskTitle, SUM(te.hours_spent) as totalHours, COUNT(te.id) as entryCount`;
+          groupClause = `GROUP BY u.id, p.id, t.id, userName, projectName, taskTitle`;
+          orderClause = `ORDER BY userName, projectName, taskTitle`;
+          break;
+        case 'project':
+          select = `SELECT p.id as projectId, p.name as projectName, t.id as taskId, t.title as taskTitle, SUM(te.hours_spent) as totalHours, COUNT(te.id) as entryCount`;
+          groupClause = `GROUP BY p.id, t.id, projectName, taskTitle`;
+          orderClause = `ORDER BY projectName, taskTitle`;
+          break;
+        case 'task':
+          select = `SELECT t.id as taskId, t.title as taskTitle, p.id as projectId, p.name as projectName, SUM(te.hours_spent) as totalHours, COUNT(te.id) as entryCount`;
+          groupClause = `GROUP BY t.id, p.id, taskTitle, projectName`;
+          orderClause = `ORDER BY projectName, taskTitle`;
+          break;
+        case 'date':
+        default:
+          select = `SELECT DATE(te.start_time) as workDate, p.id as projectId, p.name as projectName, t.id as taskId, t.title as taskTitle, u.id as userId, CONCAT(u.first_name, ' ', u.last_name) as userName, SUM(te.hours_spent) as totalHours, COUNT(te.id) as entryCount`;
+          groupClause = `GROUP BY DATE(te.start_time), p.id, t.id, u.id, projectName, taskTitle, userName`;
+          orderClause = `ORDER BY workDate DESC, projectName, taskTitle`;
+          break;
+      }
+
+      let query = `${select} ${baseJoin}`;
       
       const values = [];
       
@@ -446,25 +428,10 @@ class TimeEntry {
         values.push(filters.dateTo);
       }
       
-      // Group by
-      const groupBy = filters.groupBy || 'date';
-      switch (groupBy) {
-        case 'user':
-          query += ` GROUP BY u.id, p.id, t.id ORDER BY userName, projectName, taskTitle`;
-          break;
-        case 'project':
-          query += ` GROUP BY p.id, t.id ORDER BY projectName, taskTitle`;
-          break;
-        case 'task':
-          query += ` GROUP BY t.id ORDER BY projectName, taskTitle`;
-          break;
-        case 'date':
-        default:
-          query += ` GROUP BY DATE(te.start_time), p.id, t.id, u.id ORDER BY workDate DESC, projectName, taskTitle`;
-          break;
-      }
+      // Group and order
+      query += ` ${groupClause} ${orderClause}`;
       
-      const [rows] = await database.query(query, values);
+      const rows = await database.query(query, values);
       
       return rows.map(row => ({
         projectId: row.projectId,
@@ -473,8 +440,7 @@ class TimeEntry {
         taskTitle: row.taskTitle,
         userId: row.userId,
         userName: row.userName,
-        totalHours: Math.round((row.totalMinutes || 0) / 60 * 100) / 100,
-        billableHours: Math.round((row.billableMinutes || 0) / 60 * 100) / 100,
+        totalHours: Number(row.totalHours || 0),
         entryCount: row.entryCount,
         workDate: row.workDate
       }));
@@ -543,20 +509,20 @@ class TimeEntry {
     try {
       const query = `
         SELECT te.*, 
-               CONCAT(u.firstName, ' ', u.lastName) as userName,
+               CONCAT(u.first_name, ' ', u.last_name) as userName,
                t.title as taskTitle,
                p.name as projectName,
                p.id as projectId
         FROM time_entries te
         INNER JOIN users u ON te.user_id = u.id
         INNER JOIN tasks t ON te.task_id = t.id
-        INNER JOIN projects p ON t.projectId = p.id
+        INNER JOIN projects p ON t.project_id = p.id
         WHERE te.user_id = ? AND te.end_time IS NULL
         ORDER BY te.start_time DESC
         LIMIT 1
       `;
       
-      const [rows] = await database.query(query, [userId]);
+      const rows = await database.query(query, [userId]);
       
       if (rows.length === 0) {
         return null;
@@ -570,8 +536,7 @@ class TimeEntry {
         description: data.description,
         startTime: data.start_time,
         endTime: data.end_time,
-        duration: data.duration,
-        billable: data.billable,
+        hoursSpent: data.hours_spent,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
         userName: data.userName,

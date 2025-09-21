@@ -58,7 +58,8 @@ class ProjectController {
         return res.status(404).json(formatErrorResponse('Project not found'));
       }
 
-      res.status(200).json(formatApiResponse(project, 'Project retrieved successfully'));
+  const payload = project && typeof project.toObject === 'function' ? { ...project.toObject(), id: project.id } : project;
+  res.status(200).json(formatApiResponse(payload, 'Project retrieved successfully'));
 
     } catch (error) {
       console.error('Get project by ID error:', error);
@@ -88,8 +89,10 @@ class ProjectController {
       }
 
       const project = await projectService.createProject(projectData, user.id);
-
-      res.status(201).json(formatApiResponse(project, 'Project created successfully'));
+      const payload = project && typeof project.toObject === 'function'
+        ? { ...project.toObject(), id: project.id }
+        : project;
+      res.status(201).json(formatApiResponse(payload, 'Project created successfully'));
 
     } catch (error) {
       console.error('Create project error:', error);
@@ -111,9 +114,9 @@ class ProjectController {
       const { user } = req;
       const projectData = req.body;
 
-      const project = await projectService.updateProject(parseInt(id), projectData, user.id, user.role);
-
-      res.status(200).json(formatApiResponse(project, 'Project updated successfully'));
+  const project = await projectService.updateProject(parseInt(id), projectData, user.id, user.role);
+  const payload = project && typeof project.toObject === 'function' ? { ...project.toObject(), id: project.id } : project;
+  res.status(200).json(formatApiResponse(payload, 'Project updated successfully'));
 
     } catch (error) {
       console.error('Update project error:', error);
@@ -177,8 +180,8 @@ class ProjectController {
         user.id, 
         user.role
       );
-
-      res.status(200).json(formatApiResponse(project, 'Team member added successfully'));
+      const payload = project && typeof project.toObject === 'function' ? { ...project.toObject(), id: project.id } : project;
+      res.status(200).json(formatApiResponse(payload, 'Team member added successfully'));
 
     } catch (error) {
       console.error('Add team member error:', error);
@@ -214,8 +217,8 @@ class ProjectController {
         user.id, 
         user.role
       );
-
-      res.status(200).json(formatApiResponse(project, 'Team member removed successfully'));
+      const payload = project && typeof project.toObject === 'function' ? { ...project.toObject(), id: project.id } : project;
+      res.status(200).json(formatApiResponse(payload, 'Team member removed successfully'));
 
     } catch (error) {
       console.error('Remove team member error:', error);
@@ -253,8 +256,8 @@ class ProjectController {
         user.id, 
         user.role
       );
-
-      res.status(200).json(formatApiResponse(project, 'Member role updated successfully'));
+      const payload = project && typeof project.toObject === 'function' ? { ...project.toObject(), id: project.id } : project;
+      res.status(200).json(formatApiResponse(payload, 'Member role updated successfully'));
 
     } catch (error) {
       console.error('Update member role error:', error);

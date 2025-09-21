@@ -49,7 +49,7 @@ class User {
         userData.isActive !== undefined ? userData.isActive : (userData.is_active !== undefined ? userData.is_active : true)
       ];
 
-      const [result] = await database.query(query, values);
+  const result = await database.query(query, values);
       
       // Fetch and return the created user
       return await User.findById(result.insertId);
@@ -60,8 +60,8 @@ class User {
 
   static async findById(id) {
     try {
-      const query = 'SELECT * FROM users WHERE id = ? AND is_active = TRUE';
-      const [rows] = await database.query(query, [id]);
+  const query = 'SELECT * FROM users WHERE id = ? AND is_active = TRUE';
+  const rows = await database.query(query, [id]);
       
       if (rows.length === 0) {
         return null;
@@ -76,8 +76,8 @@ class User {
 
   static async findByEmail(email) {
     try {
-      const query = 'SELECT * FROM users WHERE email = ? AND is_active = TRUE';
-      const [rows] = await database.query(query, [email]);
+  const query = 'SELECT * FROM users WHERE email = ? AND is_active = TRUE';
+  const rows = await database.query(query, [email]);
       
       if (rows.length === 0) {
         return null;
@@ -120,7 +120,7 @@ class User {
         }
       }
 
-      const [rows] = await database.query(query, values);
+  const rows = await database.query(query, values);
       return rows.map(row => new User(row));
     } catch (error) {
       throw new Error(`Error finding users: ${error.message}`);
@@ -143,7 +143,7 @@ class User {
         values.push(searchTerm, searchTerm, searchTerm);
       }
 
-      const [rows] = await database.query(query, values);
+  const rows = await database.query(query, values);
       return rows[0].total;
     } catch (error) {
       throw new Error(`Error counting users: ${error.message}`);
@@ -189,8 +189,8 @@ class User {
   static async delete(id) {
     try {
       // Soft delete - set is_active to false
-      const query = 'UPDATE users SET is_active = FALSE, updated_at = NOW() WHERE id = ?';
-      const [result] = await database.query(query, [id]);
+  const query = 'UPDATE users SET is_active = FALSE, updated_at = NOW() WHERE id = ?';
+  const result = await database.query(query, [id]);
       
       return result.affectedRows > 0;
     } catch (error) {
@@ -244,7 +244,7 @@ class User {
         ORDER BY pm.joined_at DESC
       `;
       
-      const [rows] = await database.query(query, [this.id]);
+  const rows = await database.query(query, [this.id]);
       return rows;
     } catch (error) {
       throw new Error(`Error getting user projects: ${error.message}`);
@@ -278,7 +278,7 @@ class User {
         values.push(parseInt(options.limit));
       }
 
-      const [rows] = await database.query(query, values);
+  const rows = await database.query(query, values);
       return rows;
     } catch (error) {
       throw new Error(`Error getting user tasks: ${error.message}`);
@@ -329,6 +329,28 @@ class User {
       return true;
     } catch (error) {
       throw new Error(`Error verifying email: ${error.message}`);
+    }
+  }
+
+  // Password helpers used by AuthService
+  static async verifyPassword(userId, candidatePassword) {
+    try {
+      const user = await User.findById(userId);
+      if (!user || !user.passwordHash) return false;
+      return await bcrypt.compare(candidatePassword, user.passwordHash);
+    } catch (error) {
+      throw new Error(`Error verifying password: ${error.message}`);
+    }
+  }
+
+  static async updatePassword(userId, newPassword) {
+    try {
+      const passwordHash = await bcrypt.hash(newPassword, 10);
+      const query = 'UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?';
+      await database.query(query, [passwordHash, userId]);
+      return true;
+    } catch (error) {
+      throw new Error(`Error updating password: ${error.message}`);
     }
   }
 

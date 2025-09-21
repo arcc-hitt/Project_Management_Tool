@@ -19,8 +19,10 @@ class ProjectMember {
       
       if (Object.keys(where).length > 0) {
         const conditions = Object.keys(where).map(key => {
+          // map camelCase keys to snake_case columns
+          const column = key === 'projectId' ? 'project_id' : key === 'userId' ? 'user_id' : key;
           params.push(where[key]);
-          return `${key} = ?`;
+          return `${column} = ?`;
         });
         query += ` WHERE ${conditions.join(' AND ')}`;
       }
@@ -48,10 +50,10 @@ class ProjectMember {
   static async create(data) {
     try {
       const query = `
-        INSERT INTO project_members (projectId, userId, role, joinedAt, createdAt, updatedAt)
-        VALUES (?, ?, ?, NOW(), NOW(), NOW())
+        INSERT INTO project_members (project_id, user_id, role, joined_at)
+        VALUES (?, ?, ?, NOW())
       `;
-      const params = [data.projectId, data.userId, data.role || 'member'];
+      const params = [data.projectId, data.userId, data.role || 'developer'];
       
       await database.query(query, params);
       
@@ -68,7 +70,7 @@ class ProjectMember {
         // Update existing record
         const query = `
           UPDATE project_members 
-          SET role = ?, updatedAt = NOW()
+          SET role = ?
           WHERE id = ?
         `;
         await database.query(query, [this.role, this.id]);
@@ -90,8 +92,9 @@ class ProjectMember {
       
       if (Object.keys(where).length > 0) {
         const conditions = Object.keys(where).map(key => {
+          const column = key === 'projectId' ? 'project_id' : key === 'userId' ? 'user_id' : key;
           params.push(where[key]);
-          return `${key} = ?`;
+          return `${column} = ?`;
         });
         query += ` WHERE ${conditions.join(' AND ')}`;
       }

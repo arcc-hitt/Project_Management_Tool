@@ -14,16 +14,18 @@ export const limiter = rateLimit({
 });
 
 // Stricter rate limiter for auth endpoints
-export const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit each IP to 5 requests per windowMs
-  message: {
-    success: false,
-    message: 'Too many authentication attempts, please try again later.'
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+export const authLimiter = (process.env.NODE_ENV === 'test')
+  ? (req, res, next) => next() // No rate limiting during tests
+  : rateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 5, // Limit each IP to 5 requests per windowMs
+      message: {
+        success: false,
+        message: 'Too many authentication attempts, please try again later.'
+      },
+      standardHeaders: true,
+      legacyHeaders: false,
+    });
 
 // AI endpoint rate limiter (for GROQ API calls)
 export const aiLimiter = rateLimit({

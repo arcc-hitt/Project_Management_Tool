@@ -1,4 +1,4 @@
-import database from '../config/database.js';
+ import database from '../config/database.js';
 import { formatDateForDB, snakeToCamel, camelToSnake } from '../utils/helpers.js';
 
 class Task {
@@ -51,7 +51,7 @@ class Task {
         taskData.blockedReason || taskData.blocked_reason || null
       ];
 
-      const [result] = await database.query(query, values);
+  const result = await database.query(query, values);
       
       // Fetch and return the created task
       return await Task.findById(result.insertId);
@@ -66,20 +66,18 @@ class Task {
         SELECT t.*, 
                p.name as projectName,
                p.status as projectStatus,
-               CONCAT(assignee.firstName, ' ', assignee.lastName) as assigneeName,
+               CONCAT(assignee.first_name, ' ', assignee.last_name) as assigneeName,
                assignee.email as assigneeEmail,
-               CONCAT(creator.firstName, ' ', creator.lastName) as createdByName,
-               creator.email as createdByEmail,
-               us.title as userStoryTitle
+               CONCAT(creator.first_name, ' ', creator.last_name) as createdByName,
+               creator.email as createdByEmail
         FROM tasks t
-        LEFT JOIN projects p ON t.projectId = p.id
-        LEFT JOIN users assignee ON t.assignedTo = assignee.id
-        LEFT JOIN users creator ON t.createdBy = creator.id
-        LEFT JOIN user_stories us ON t.userStoryId = us.id
+        LEFT JOIN projects p ON t.project_id = p.id
+        LEFT JOIN users assignee ON t.assigned_to = assignee.id
+        LEFT JOIN users creator ON t.created_by = creator.id
         WHERE t.id = ?
       `;
       
-      const [rows] = await database.query(query, [id]);
+      const rows = await database.query(query, [id]);
       
       if (rows.length === 0) {
         return null;
@@ -97,20 +95,18 @@ class Task {
         SELECT t.*, 
                p.name as projectName,
                p.status as projectStatus,
-               CONCAT(assignee.firstName, ' ', assignee.lastName) as assigneeName,
+               CONCAT(assignee.first_name, ' ', assignee.last_name) as assigneeName,
                assignee.email as assigneeEmail,
-               CONCAT(creator.firstName, ' ', creator.lastName) as createdByName,
+               CONCAT(creator.first_name, ' ', creator.last_name) as createdByName,
                creator.email as createdByEmail,
-               us.title as userStoryTitle,
                CASE 
-                 WHEN t.dueDate < NOW() AND t.status NOT IN ('done') THEN TRUE
+                 WHEN t.due_date < NOW() AND t.status NOT IN ('done') THEN TRUE
                  ELSE FALSE
                END as isOverdue
         FROM tasks t
-        LEFT JOIN projects p ON t.projectId = p.id
-        LEFT JOIN users assignee ON t.assignedTo = assignee.id
-        LEFT JOIN users creator ON t.createdBy = creator.id
-        LEFT JOIN user_stories us ON t.userStoryId = us.id
+        LEFT JOIN projects p ON t.project_id = p.id
+        LEFT JOIN users assignee ON t.assigned_to = assignee.id
+        LEFT JOIN users creator ON t.created_by = creator.id
         WHERE 1=1
       `;
       
@@ -118,7 +114,7 @@ class Task {
 
       // Add filtering options
       if (options.projectId) {
-        query += ' AND t.projectId = ?';
+        query += ' AND t.project_id = ?';
         values.push(options.projectId);
       }
 
@@ -133,22 +129,17 @@ class Task {
       }
 
       if (options.assignedTo) {
-        query += ' AND t.assignedTo = ?';
+        query += ' AND t.assigned_to = ?';
         values.push(options.assignedTo);
       }
 
       if (options.createdBy) {
-        query += ' AND t.createdBy = ?';
+        query += ' AND t.created_by = ?';
         values.push(options.createdBy);
       }
 
-      if (options.userStoryId) {
-        query += ' AND t.userStoryId = ?';
-        values.push(options.userStoryId);
-      }
-
       if (options.overdue) {
-        query += ' AND t.dueDate < NOW() AND t.status NOT IN (\'done\')';
+        query += ' AND t.due_date < NOW() AND t.status NOT IN (\'done\')';
       }
 
       if (options.search) {
@@ -157,10 +148,11 @@ class Task {
         values.push(searchTerm, searchTerm);
       }
 
-      // Add ordering
-      const orderBy = options.orderBy || 'createdAt';
-      const orderDir = options.orderDir || 'DESC';
-      query += ` ORDER BY t.${orderBy} ${orderDir}`;
+    // Add ordering with sanitization
+    const allowedOrderBy = new Set(['created_at', 'updated_at', 'due_date', 'priority', 'status']);
+    const orderBy = allowedOrderBy.has(options.orderBy) ? options.orderBy : 'created_at';
+    const orderDir = (options.orderDir || 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+    query += ` ORDER BY t.${orderBy} ${orderDir}`;
 
       // Add pagination
       if (options.limit) {
@@ -173,7 +165,7 @@ class Task {
         }
       }
 
-      const [rows] = await database.query(query, values);
+  const rows = await database.query(query, values);
       return rows.map(row => new Task(row));
     } catch (error) {
       throw new Error(`Error finding tasks: ${error.message}`);
@@ -194,7 +186,7 @@ class Task {
       const values = [];
 
       if (options.projectId) {
-        query += ' AND projectId = ?';
+        query += ' AND project_id = ?';
         values.push(options.projectId);
       }
 
@@ -204,15 +196,14 @@ class Task {
       }
 
       if (options.assignedTo) {
-        query += ' AND assignedTo = ?';
+        query += ' AND assigned_to = ?';
         values.push(options.assignedTo);
       }
 
       if (options.overdue) {
-        query += ' AND dueDate < NOW() AND status NOT IN (\'done\')';
+        query += ' AND due_date < NOW() AND status NOT IN (\'done\')';
       }
-
-      const [rows] = await database.query(query, values);
+      const rows = await database.query(query, values);
       return rows[0].total;
     } catch (error) {
       throw new Error(`Error counting tasks: ${error.message}`);
@@ -227,11 +218,26 @@ class Task {
       // Build dynamic update query
       Object.keys(updateData).forEach(key => {
         if (updateData[key] !== undefined && key !== 'id') {
-          if (key === 'dueDate' || key === 'startDate' || key === 'completedAt') {
-            fields.push(`${key} = ?`);
+          if (key === 'dueDate' || key === 'completedAt') {
+            const column = key === 'dueDate' ? 'due_date' : 'completed_at';
+            fields.push(`${column} = ?`);
             values.push(updateData[key] ? formatDateForDB(updateData[key]) : null);
+          } else if (key === 'tags') {
+            fields.push('tags = ?');
+            const v = updateData[key];
+            values.push(typeof v === 'string' ? v : (v != null ? JSON.stringify(v) : null));
           } else {
-            fields.push(`${key} = ?`);
+            // Map camelCase to snake_case for known fields
+            const column =
+              key === 'projectId' ? 'project_id' :
+              key === 'assignedTo' ? 'assigned_to' :
+              key === 'createdBy' ? 'created_by' :
+              key === 'estimatedHours' ? 'estimated_hours' :
+              key === 'actualHours' ? 'actual_hours' :
+              key === 'storyPoints' ? 'story_points' :
+              key === 'blockedReason' ? 'blocked_reason' :
+              key;
+            fields.push(`${column} = ?`);
             values.push(updateData[key]);
           }
         }
@@ -243,13 +249,13 @@ class Task {
 
       // Automatically set completedAt when status changes to 'done'
       if (updateData.status === 'done' && !updateData.completedAt) {
-        fields.push('completedAt = NOW()');
+        fields.push('completed_at = NOW()');
       } else if (updateData.status && updateData.status !== 'done') {
-        fields.push('completedAt = NULL');
+        fields.push('completed_at = NULL');
       }
 
       // Add updated timestamp
-      fields.push('updatedAt = NOW()');
+  fields.push('updated_at = NOW()');
       values.push(id);
 
       const query = `UPDATE tasks SET ${fields.join(', ')} WHERE id = ?`;
@@ -263,8 +269,8 @@ class Task {
 
   static async delete(id) {
     try {
-      const query = 'DELETE FROM tasks WHERE id = ?';
-      const [result] = await database.query(query, [id]);
+  const query = 'DELETE FROM tasks WHERE id = ?';
+  const result = await database.query(query, [id]);
       
       return result.affectedRows > 0;
     } catch (error) {
@@ -291,7 +297,7 @@ class Task {
 
   static async assign(id, userId) {
     try {
-      return await Task.update(id, { assignedTo: userId });
+  return await Task.update(id, { assignedTo: userId });
     } catch (error) {
       throw new Error(`Error assigning task: ${error.message}`);
     }
@@ -320,16 +326,16 @@ class Task {
     try {
       const query = `
         SELECT tc.*, 
-               CONCAT(u.firstName, ' ', u.lastName) as userName,
+               CONCAT(u.first_name, ' ', u.last_name) as userName,
                u.email as userEmail,
-               u.avatar as userAvatar
+               u.avatar_url as userAvatar
         FROM task_comments tc
-        INNER JOIN users u ON tc.userId = u.id
-        WHERE tc.taskId = ?
-        ORDER BY tc.createdAt ASC
+        INNER JOIN users u ON tc.user_id = u.id
+        WHERE tc.task_id = ?
+        ORDER BY tc.created_at ASC
       `;
       
-      const [rows] = await database.query(query, [this.id]);
+      const rows = await database.query(query, [this.id]);
       return rows;
     } catch (error) {
       throw new Error(`Error getting task comments: ${error.message}`);
@@ -339,11 +345,11 @@ class Task {
   async addComment(userId, comment) {
     try {
       const query = `
-        INSERT INTO task_comments (taskId, userId, comment, createdAt, updatedAt)
-        VALUES (?, ?, ?, NOW(), NOW())
+        INSERT INTO task_comments (task_id, user_id, comment, created_at)
+        VALUES (?, ?, ?, NOW())
       `;
       
-      const [result] = await database.query(query, [this.id, userId, comment]);
+      const result = await database.query(query, [this.id, userId, comment]);
       return result.insertId;
     } catch (error) {
       throw new Error(`Error adding task comment: ${error.message}`);
@@ -377,7 +383,6 @@ class Task {
     return {
       id: this.id,
       projectId: this.projectId,
-      userStoryId: this.userStoryId,
       title: this.title,
       description: this.description,
       status: this.status,
@@ -387,11 +392,91 @@ class Task {
       estimatedHours: this.estimatedHours,
       actualHours: this.actualHours,
       dueDate: this.dueDate,
-      startDate: this.startDate,
       completedAt: this.completedAt,
+      tags: this.tags,
+      storyPoints: this.storyPoints,
+      blocked: this.blocked,
+      blockedReason: this.blockedReason,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt
     };
+  }
+
+  // Static helpers expected by services
+  static async getComments(taskId) {
+    const query = `
+      SELECT tc.*, 
+             CONCAT(u.first_name, ' ', u.last_name) as userName,
+             u.email as userEmail,
+             u.avatar_url as userAvatar
+      FROM task_comments tc
+      INNER JOIN users u ON tc.user_id = u.id
+      WHERE tc.task_id = ?
+      ORDER BY tc.created_at ASC
+    `;
+    return await database.query(query, [taskId]);
+  }
+
+  static async hasUserAccess(taskId, userId) {
+    const query = `
+      SELECT 1
+      FROM tasks t
+      LEFT JOIN project_members pm ON pm.project_id = t.project_id
+      WHERE t.id = ?
+        AND (t.assigned_to = ? OR t.created_by = ? OR pm.user_id = ?)
+      LIMIT 1
+    `;
+    const rows = await database.query(query, [taskId, userId, userId, userId]);
+    return rows.length > 0;
+  }
+
+  static async findByAssignee(userId, options = {}) {
+    return await Task.findAll({ ...options, assignedTo: userId });
+  }
+
+  static async findByUserAccess(userId, projectIds = [], options = {}) {
+    let query = `
+      SELECT t.*, 
+             p.name as projectName,
+             p.status as projectStatus,
+             CONCAT(assignee.first_name, ' ', assignee.last_name) as assigneeName,
+             CONCAT(creator.first_name, ' ', creator.last_name) as createdByName
+      FROM tasks t
+      LEFT JOIN projects p ON t.project_id = p.id
+      LEFT JOIN users assignee ON t.assigned_to = assignee.id
+      LEFT JOIN users creator ON t.created_by = creator.id
+      WHERE (t.assigned_to = ? OR t.created_by = ?`;
+    const params = [userId, userId];
+
+    if (Array.isArray(projectIds) && projectIds.length > 0) {
+      const placeholders = projectIds.map(() => '?').join(',');
+      query += ` OR t.project_id IN (${placeholders})`;
+      params.push(...projectIds);
+    }
+
+    query += ')';
+
+    // apply filters similar to findAll
+    if (options.status) { query += ' AND t.status = ?'; params.push(options.status); }
+    if (options.priority) { query += ' AND t.priority = ?'; params.push(options.priority); }
+    if (options.projectId) { query += ' AND t.project_id = ?'; params.push(options.projectId); }
+    if (options.assignedTo) { query += ' AND t.assigned_to = ?'; params.push(options.assignedTo); }
+    if (options.search) { const s = `%${options.search}%`; query += ' AND (t.title LIKE ? OR t.description LIKE ?)'; params.push(s, s); }
+    if (options.overdue) { query += " AND t.due_date < NOW() AND t.status NOT IN ('done')"; }
+
+    const allowedOrderBy = new Set(['created_at', 'updated_at', 'due_date', 'priority', 'status']);
+    const orderBy = allowedOrderBy.has(options.orderBy) ? options.orderBy : 'created_at';
+    const orderDir = (options.orderDir || 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+    query += ` ORDER BY t.${orderBy} ${orderDir}`;
+
+    if (options.limit) {
+      query += ' LIMIT ?';
+      params.push(parseInt(options.limit));
+      if (options.offset) { query += ' OFFSET ?'; params.push(parseInt(options.offset)); }
+    }
+
+    const rows = await database.query(query, params);
+    return rows.map(row => new Task(row));
   }
 
   toJSON() {

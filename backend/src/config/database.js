@@ -34,7 +34,11 @@ class Database {
 
   async query(sql, params = []) {
     try {
-      const [rows] = await this.pool.execute(sql, params);
+      if (!this.pool) {
+        await this.connect();
+      }
+      // Use text protocol to support DDL/administrative statements during migrations
+      const [rows] = await this.pool.query(sql, params);
       return rows;
     } catch (error) {
       console.error('Database query error:', error.message);
@@ -43,6 +47,9 @@ class Database {
   }
 
   async transaction(callback) {
+    if (!this.pool) {
+      await this.connect();
+    }
     const connection = await this.pool.getConnection();
     await connection.beginTransaction();
     
@@ -61,7 +68,9 @@ class Database {
   async close() {
     if (this.pool) {
       await this.pool.end();
-      console.log('📥 Database connection closed');
+      // Reset the pool so future queries can reconnect lazily
+      this.pool = null;
+  console.log('Database connection closed');
     }
   }
 }
