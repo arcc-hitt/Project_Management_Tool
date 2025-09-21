@@ -25,7 +25,7 @@ class Comment {
         commentData.comment
       ];
 
-      const [result] = await database.query(query, values);
+  const result = await database.query(query, values);
       
       // Fetch and return the created comment
       return await Comment.findById(result.insertId);
@@ -37,21 +37,21 @@ class Comment {
   static async findById(id) {
     try {
       const query = `
-        SELECT tc.*, 
-               CONCAT(u.firstName, ' ', u.lastName) as userName,
-               u.email as userEmail,
-               u.avatar as userAvatar,
-               u.role as userRole,
-               t.title as taskTitle,
-               p.name as projectName
-        FROM task_comments tc
-        INNER JOIN users u ON tc.userId = u.id
-        INNER JOIN tasks t ON tc.taskId = t.id
-        INNER JOIN projects p ON t.projectId = p.id
-        WHERE tc.id = ?
+   SELECT tc.*, 
+     CONCAT(u.first_name, ' ', u.last_name) as userName,
+     u.email as userEmail,
+     u.avatar_url as userAvatar,
+     u.role as userRole,
+     t.title as taskTitle,
+     p.name as projectName
+   FROM task_comments tc
+   INNER JOIN users u ON tc.user_id = u.id
+   INNER JOIN tasks t ON tc.task_id = t.id
+   INNER JOIN projects p ON t.project_id = p.id
+   WHERE tc.id = ?
       `;
       
-      const [rows] = await database.query(query, [id]);
+      const rows = await database.query(query, [id]);
       
       if (rows.length === 0) {
         return null;
@@ -67,20 +67,20 @@ class Comment {
     try {
       let query = `
         SELECT tc.*, 
-               CONCAT(u.firstName, ' ', u.lastName) as userName,
-               u.email as userEmail,
-               u.avatar as userAvatar,
+     CONCAT(u.first_name, ' ', u.last_name) as userName,
+     u.email as userEmail,
+     u.avatar_url as userAvatar,
                u.role as userRole
-        FROM task_comments tc
-        INNER JOIN users u ON tc.userId = u.id
-        WHERE tc.taskId = ?
+   FROM task_comments tc
+   INNER JOIN users u ON tc.user_id = u.id
+   WHERE tc.task_id = ?
       `;
       
       const values = [taskId];
 
       // Add ordering
       const orderDir = options.orderDir || 'ASC';
-      query += ` ORDER BY tc.createdAt ${orderDir}`;
+  query += ` ORDER BY tc.created_at ${orderDir}`;
 
       // Add pagination
       if (options.limit) {
@@ -93,7 +93,7 @@ class Comment {
         }
       }
 
-      const [rows] = await database.query(query, values);
+  const rows = await database.query(query, values);
       return rows.map(row => new Comment(row));
     } catch (error) {
       throw new Error(`Error finding comments by task: ${error.message}`);
@@ -104,16 +104,16 @@ class Comment {
     try {
       let query = `
         SELECT tc.*, 
-               CONCAT(u.firstName, ' ', u.lastName) as userName,
-               u.email as userEmail,
-               u.avatar as userAvatar,
+     CONCAT(u.first_name, ' ', u.last_name) as userName,
+     u.email as userEmail,
+     u.avatar_url as userAvatar,
                t.title as taskTitle,
                p.name as projectName
-        FROM task_comments tc
-        INNER JOIN users u ON tc.userId = u.id
-        INNER JOIN tasks t ON tc.taskId = t.id
-        INNER JOIN projects p ON t.projectId = p.id
-        WHERE tc.userId = ?
+   FROM task_comments tc
+   INNER JOIN users u ON tc.user_id = u.id
+   INNER JOIN tasks t ON tc.task_id = t.id
+   INNER JOIN projects p ON t.project_id = p.id
+   WHERE tc.user_id = ?
       `;
       
       const values = [userId];
@@ -125,7 +125,7 @@ class Comment {
       }
 
       // Add ordering
-      query += ' ORDER BY tc.createdAt DESC';
+  query += ' ORDER BY tc.created_at DESC';
 
       // Add pagination
       if (options.limit) {
@@ -138,7 +138,7 @@ class Comment {
         }
       }
 
-      const [rows] = await database.query(query, values);
+  const rows = await database.query(query, values);
       return rows.map(row => new Comment(row));
     } catch (error) {
       throw new Error(`Error finding comments by user: ${error.message}`);
@@ -149,15 +149,15 @@ class Comment {
     try {
       let query = `
         SELECT tc.*, 
-               CONCAT(u.firstName, ' ', u.lastName) as userName,
-               u.email as userEmail,
-               u.avatar as userAvatar,
+     CONCAT(u.first_name, ' ', u.last_name) as userName,
+     u.email as userEmail,
+     u.avatar_url as userAvatar,
                t.title as taskTitle,
                p.name as projectName
-        FROM task_comments tc
-        INNER JOIN users u ON tc.userId = u.id
-        INNER JOIN tasks t ON tc.taskId = t.id
-        INNER JOIN projects p ON t.projectId = p.id
+   FROM task_comments tc
+   INNER JOIN users u ON tc.user_id = u.id
+   INNER JOIN tasks t ON tc.task_id = t.id
+   INNER JOIN projects p ON t.project_id = p.id
         WHERE 1=1
       `;
       
@@ -170,12 +170,12 @@ class Comment {
       }
 
       if (options.taskId) {
-        query += ' AND tc.taskId = ?';
+        query += ' AND tc.task_id = ?';
         values.push(options.taskId);
       }
 
       if (options.userId) {
-        query += ' AND tc.userId = ?';
+        query += ' AND tc.user_id = ?';
         values.push(options.userId);
       }
 
@@ -185,7 +185,7 @@ class Comment {
       }
 
       // Add ordering
-      query += ' ORDER BY tc.createdAt DESC';
+  query += ' ORDER BY tc.created_at DESC';
 
       // Add pagination
       if (options.limit) {
@@ -198,7 +198,7 @@ class Comment {
         }
       }
 
-      const [rows] = await database.query(query, values);
+  const rows = await database.query(query, values);
       return rows.map(row => new Comment(row));
     } catch (error) {
       throw new Error(`Error finding comments: ${error.message}`);
@@ -210,8 +210,8 @@ class Comment {
       let query = `
         SELECT COUNT(*) as total 
         FROM task_comments tc
-        INNER JOIN tasks t ON tc.taskId = t.id
-        INNER JOIN projects p ON t.projectId = p.id
+        INNER JOIN tasks t ON tc.task_id = t.id
+        INNER JOIN projects p ON t.project_id = p.id
         WHERE 1=1
       `;
       const values = [];
@@ -222,16 +222,16 @@ class Comment {
       }
 
       if (options.taskId) {
-        query += ' AND tc.taskId = ?';
+        query += ' AND tc.task_id = ?';
         values.push(options.taskId);
       }
 
       if (options.userId) {
-        query += ' AND tc.userId = ?';
+        query += ' AND tc.user_id = ?';
         values.push(options.userId);
       }
 
-      const [rows] = await database.query(query, values);
+  const rows = await database.query(query, values);
       return rows[0].total;
     } catch (error) {
       throw new Error(`Error counting comments: ${error.message}`);
@@ -256,7 +256,7 @@ class Comment {
       }
 
       // Add updated timestamp
-      fields.push('updatedAt = NOW()');
+  fields.push('updated_at = NOW()');
       values.push(id);
 
       const query = `UPDATE task_comments SET ${fields.join(', ')} WHERE id = ?`;
@@ -271,7 +271,7 @@ class Comment {
   static async delete(id) {
     try {
       const query = 'DELETE FROM task_comments WHERE id = ?';
-      const [result] = await database.query(query, [id]);
+  const result = await database.query(query, [id]);
       
       return result.affectedRows > 0;
     } catch (error) {
@@ -283,16 +283,16 @@ class Comment {
     try {
       let query = `
         SELECT tc.*, 
-               CONCAT(u.firstName, ' ', u.lastName) as userName,
-               u.avatar as userAvatar,
+     CONCAT(u.first_name, ' ', u.last_name) as userName,
+     u.avatar_url as userAvatar,
                t.title as taskTitle,
                p.name as projectName,
                p.id as projectId
-        FROM task_comments tc
-        INNER JOIN users u ON tc.userId = u.id
-        INNER JOIN tasks t ON tc.taskId = t.id
-        INNER JOIN projects p ON t.projectId = p.id
-        WHERE tc.createdAt >= DATE_SUB(NOW(), INTERVAL ? DAY)
+   FROM task_comments tc
+   INNER JOIN users u ON tc.user_id = u.id
+   INNER JOIN tasks t ON tc.task_id = t.id
+   INNER JOIN projects p ON t.project_id = p.id
+   WHERE tc.created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
       `;
       
       const values = [options.days || 7];
@@ -303,18 +303,18 @@ class Comment {
       }
 
       if (options.userId) {
-        query += ' AND tc.userId = ?';
+        query += ' AND tc.user_id = ?';
         values.push(options.userId);
       }
 
-      query += ' ORDER BY tc.createdAt DESC';
+      query += ' ORDER BY tc.created_at DESC';
 
       if (options.limit) {
         query += ' LIMIT ?';
         values.push(parseInt(options.limit));
       }
 
-      const [rows] = await database.query(query, values);
+  const rows = await database.query(query, values);
       return rows.map(row => new Comment(row));
     } catch (error) {
       throw new Error(`Error getting recent comment activity: ${error.message}`);
@@ -345,11 +345,11 @@ class Comment {
       const query = `
         SELECT t.*, p.name as projectName
         FROM tasks t
-        INNER JOIN projects p ON t.projectId = p.id
+        INNER JOIN projects p ON t.project_id = p.id
         WHERE t.id = ?
       `;
       
-      const [rows] = await database.query(query, [this.taskId]);
+      const rows = await database.query(query, [this.taskId]);
       return rows[0] || null;
     } catch (error) {
       throw new Error(`Error getting task for comment: ${error.message}`);
@@ -359,12 +359,12 @@ class Comment {
   async getUser() {
     try {
       const query = `
-        SELECT id, firstName, lastName, email, avatar, role
+        SELECT id, first_name as firstName, last_name as lastName, email, avatar_url as avatar, role
         FROM users
-        WHERE id = ? AND isActive = TRUE
+        WHERE id = ? AND is_active = TRUE
       `;
       
-      const [rows] = await database.query(query, [this.userId]);
+      const rows = await database.query(query, [this.userId]);
       return rows[0] || null;
     } catch (error) {
       throw new Error(`Error getting user for comment: ${error.message}`);

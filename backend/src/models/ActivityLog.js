@@ -29,7 +29,7 @@ class ActivityLog {
         activityData.newValues ? JSON.stringify(activityData.newValues) : null
       ];
 
-      const [result] = await database.query(query, values);
+      const result = await database.query(query, values);
       
       // Fetch and return the created activity log
       return await ActivityLog.findById(result.insertId);
@@ -41,16 +41,16 @@ class ActivityLog {
   static async findById(id) {
     try {
       const query = `
-        SELECT al.*, 
-               CONCAT(u.firstName, ' ', u.lastName) as userName,
-               u.email as userEmail,
-               u.avatar as userAvatar
-        FROM activity_logs al
-        INNER JOIN users u ON al.user_id = u.id
+   SELECT al.*, 
+     CONCAT(u.first_name, ' ', u.last_name) as userName,
+     u.email as userEmail,
+     u.avatar_url as userAvatar
+   FROM activity_logs al
+   INNER JOIN users u ON al.user_id = u.id
         WHERE al.id = ?
       `;
       
-      const [rows] = await database.query(query, [id]);
+      const rows = await database.query(query, [id]);
       
       if (rows.length === 0) {
         return null;
@@ -96,12 +96,12 @@ class ActivityLog {
   static async findAll(filters = {}) {
     try {
       let query = `
-        SELECT al.*, 
-               CONCAT(u.firstName, ' ', u.lastName) as userName,
-               u.email as userEmail,
-               u.avatar as userAvatar
-        FROM activity_logs al
-        INNER JOIN users u ON al.user_id = u.id
+   SELECT al.*, 
+     CONCAT(u.first_name, ' ', u.last_name) as userName,
+     u.email as userEmail,
+     u.avatar_url as userAvatar
+   FROM activity_logs al
+   INNER JOIN users u ON al.user_id = u.id
         WHERE 1=1
       `;
       
@@ -152,7 +152,7 @@ class ActivityLog {
         }
       }
       
-      const [rows] = await database.query(query, values);
+  const rows = await database.query(query, values);
       
       return rows.map(data => {
         // Parse JSON fields
@@ -259,7 +259,7 @@ class ActivityLog {
         values.push(filters.dateTo);
       }
       
-      const [rows] = await database.query(query, values);
+  const rows = await database.query(query, values);
       return rows[0].total;
     } catch (error) {
       throw new Error(`Error counting activity logs: ${error.message}`);
