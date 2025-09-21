@@ -9,7 +9,6 @@ import Notification from './Notification.js';
 import ActivityLog from './ActivityLog.js';
 import TimeEntry from './TimeEntry.js';
 import ProjectMember from './ProjectMember.js';
-import TaskAssignment from './TaskAssignment.js';
 
 export {
   User,
@@ -19,8 +18,7 @@ export {
   Notification,
   ActivityLog,
   TimeEntry,
-  ProjectMember,
-  TaskAssignment
+  ProjectMember
 };
 
 export default {
@@ -31,6 +29,5 @@ export default {
   Notification,
   ActivityLog,
   TimeEntry,
-  ProjectMember,
-  TaskAssignment
+  ProjectMember
 };

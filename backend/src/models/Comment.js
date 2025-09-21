@@ -1,26 +1,27 @@
 import database from '../config/database.js';
+import { snakeToCamel, camelToSnake } from '../utils/helpers.js';
 
 class Comment {
   constructor(data = {}) {
+    // Accept both camelCase (from services) and snake_case (from database)
     this.id = data.id;
-    this.taskId = data.taskId;
-    this.userId = data.userId;
+    this.taskId = data.taskId || data.task_id;
+    this.userId = data.userId || data.user_id;
     this.comment = data.comment;
-    this.createdAt = data.createdAt;
-    this.updatedAt = data.updatedAt;
+    this.createdAt = data.createdAt || data.created_at;
   }
 
   // Static methods for database operations
   static async create(commentData) {
     try {
       const query = `
-        INSERT INTO task_comments (taskId, userId, comment, createdAt, updatedAt)
-        VALUES (?, ?, ?, NOW(), NOW())
+        INSERT INTO task_comments (task_id, user_id, comment, created_at)
+        VALUES (?, ?, ?, NOW())
       `;
       
       const values = [
-        commentData.taskId,
-        commentData.userId,
+        commentData.taskId || commentData.task_id,
+        commentData.userId || commentData.user_id,
         commentData.comment
       ];
 

@@ -1,9 +1,10 @@
 export interface User {
   id: number;
-  name: string;
+  firstName: string;
+  lastName: string;
   email: string;
   role: 'admin' | 'manager' | 'developer';
-  avatar?: string;
+  avatarUrl?: string;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -83,7 +84,8 @@ export interface LoginRequest {
 }
 
 export interface RegisterRequest {
-  name: string;
+  firstName: string;
+  lastName: string;
   email: string;
   password: string;
   role: 'admin' | 'manager' | 'developer';

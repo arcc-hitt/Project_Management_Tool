@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
-import type { User, AuthResponse, LoginRequest, RegisterRequest } from '../types';
-import { apiClient } from '../services/api';
+import type { User, LoginRequest, RegisterRequest } from '../types';
+import { authService } from '../services/authService';
 
 interface AuthContextType {
   user: User | null;
@@ -39,14 +39,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const token = localStorage.getItem('accessToken');
         if (token) {
           // Verify token and get user data
-          const response = await apiClient.get<User>('/auth/me');
-          if (response.success && response.data) {
-            setUser(response.data);
-          } else {
-            // Invalid token, clear storage
-            localStorage.removeItem('accessToken');
-            localStorage.removeItem('refreshToken');
-          }
+          const user = await authService.getCurrentUser();
+          setUser(user);
         }
       } catch (error) {
         console.error('Auth initialization failed:', error);
@@ -63,24 +57,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (credentials: LoginRequest) => {
     try {
-      const response = await apiClient.post<AuthResponse>('/auth/login', credentials);
+      const { user, accessToken, refreshToken } = await authService.login(credentials);
       
-      if (response.success && response.data) {
-        const { user, accessToken, refreshToken } = response.data;
-        
-        // Store tokens
-        localStorage.setItem('accessToken', accessToken);
-        localStorage.setItem('refreshToken', refreshToken);
-        
-        // Set user
-        setUser(user);
-      } else {
-        throw new Error(response.message || 'Login failed');
-      }
+      // Store tokens
+      localStorage.setItem('accessToken', accessToken);
+      localStorage.setItem('refreshToken', refreshToken);
+      
+      // Set user
+      setUser(user);
     } catch (error: any) {
       console.error('Login error:', error);
       throw new Error(
-        error.response?.data?.message || 
         error.message || 
         'Login failed. Please check your credentials.'
       );
@@ -89,24 +76,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const register = async (userData: RegisterRequest) => {
     try {
-      const response = await apiClient.post<AuthResponse>('/auth/register', userData);
+      const { user, accessToken, refreshToken } = await authService.register(userData);
       
-      if (response.success && response.data) {
-        const { user, accessToken, refreshToken } = response.data;
-        
-        // Store tokens
-        localStorage.setItem('accessToken', accessToken);
-        localStorage.setItem('refreshToken', refreshToken);
-        
-        // Set user
-        setUser(user);
-      } else {
-        throw new Error(response.message || 'Registration failed');
-      }
+      // Store tokens
+      localStorage.setItem('accessToken', accessToken);
+      localStorage.setItem('refreshToken', refreshToken);
+      
+      // Set user
+      setUser(user);
     } catch (error: any) {
       console.error('Registration error:', error);
       throw new Error(
-        error.response?.data?.message || 
         error.message || 
         'Registration failed. Please try again.'
       );
@@ -120,7 +100,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUser(null);
     
     // Optionally call backend logout endpoint
-    apiClient.post('/auth/logout').catch(console.error);
+    authService.logout().catch(console.error);
   };
 
   const updateUser = (userData: Partial<User>) => {

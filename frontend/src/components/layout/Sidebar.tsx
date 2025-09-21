@@ -69,12 +69,12 @@ export const Sidebar: React.FC = () => {
             <div className="flex-shrink-0">
               <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
                 <span className="text-sm font-medium text-primary-foreground">
-                  {user?.name?.charAt(0).toUpperCase()}
+                  {user?.firstName?.charAt(0).toUpperCase()}
                 </span>
               </div>
             </div>
             <div className="ml-3">
-              <p className="text-sm font-medium">{user?.name}</p>
+              <p className="text-sm font-medium">{user?.firstName} {user?.lastName}</p>
               <p className="text-xs text-muted-foreground capitalize">{user?.role}</p>
             </div>
           </div>

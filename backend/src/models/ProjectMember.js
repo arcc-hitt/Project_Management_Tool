@@ -1,14 +1,14 @@
 import database from '../config/database.js';
+import { snakeToCamel, camelToSnake } from '../utils/helpers.js';
 
 class ProjectMember {
   constructor(data = {}) {
+    // Accept both camelCase (from services) and snake_case (from database)
     this.id = data.id;
-    this.projectId = data.projectId;
-    this.userId = data.userId;
-    this.role = data.role || 'member';
-    this.joinedAt = data.joinedAt;
-    this.createdAt = data.createdAt;
-    this.updatedAt = data.updatedAt;
+    this.projectId = data.projectId || data.project_id;
+    this.userId = data.userId || data.user_id;
+    this.role = data.role || 'developer';
+    this.joinedAt = data.joinedAt || data.joined_at;
   }
 
   // Static methods for database operations

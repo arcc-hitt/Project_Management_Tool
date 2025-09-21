@@ -1,16 +1,16 @@
 import database from '../config/database.js';
+import { snakeToCamel, camelToSnake } from '../utils/helpers.js';
 
 class Notification {
   constructor(data = {}) {
+    // Accept both camelCase (from services) and snake_case (from database)
     this.id = data.id;
-    this.userId = data.userId;
-    this.type = data.type;
+    this.userId = data.userId || data.user_id;
     this.title = data.title;
     this.message = data.message;
-    this.entityType = data.entityType;
-    this.entityId = data.entityId;
-    this.isRead = data.isRead || false;
-    this.createdAt = data.createdAt;
+    this.type = data.type || 'info';
+    this.isRead = data.isRead !== undefined ? data.isRead : (data.is_read !== undefined ? data.is_read : false);
+    this.createdAt = data.createdAt || data.created_at;
   }
 
   // Static methods for database operations
