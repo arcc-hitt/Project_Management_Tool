@@ -58,8 +58,8 @@ class UserService {
         FROM users 
         ${whereClause}
       `;
-      const [countResult] = await database.query(countQuery, queryParams);
-      const totalUsers = countResult.total;
+      const countRows = await database.query(countQuery, queryParams);
+      const totalUsers = countRows[0]?.total ?? 0;
 
       // Get paginated users
       const { limit: sqlLimit, offset } = getPaginationSQL(page, limit);
@@ -75,7 +75,14 @@ class UserService {
       const users = await database.query(usersQuery, [...queryParams, sqlLimit, offset]);
 
       return {
-        users: users.map(user => snakeToCamel(user)),
+        users: users.map(user => {
+          const camel = snakeToCamel(user);
+          // Ensure boolean normalization for isActive
+          if (camel.isActive !== undefined) {
+            camel.isActive = camel.isActive === true || camel.isActive === 1;
+          }
+          return camel;
+        }),
         pagination: {
           totalItems: totalUsers,
           totalPages: Math.ceil(totalUsers / limit),
@@ -106,7 +113,14 @@ class UserService {
       `;
       
       const users = await database.query(query, [userId]);
-      return users.length > 0 ? snakeToCamel(users[0]) : null;
+      if (users.length > 0) {
+        const camel = snakeToCamel(users[0]);
+        if (camel.isActive !== undefined) {
+          camel.isActive = camel.isActive === true || camel.isActive === 1;
+        }
+        return camel;
+      }
+      return null;
 
     } catch (error) {
       throw error;
@@ -315,8 +329,8 @@ class UserService {
         FROM users
       `;
 
-      const [stats] = await database.query(statsQuery);
-      return snakeToCamel(stats);
+    const statsRows = await database.query(statsQuery);
+  return snakeToCamel(statsRows[0] || {});
 
     } catch (error) {
       throw error;
@@ -338,7 +352,14 @@ class UserService {
       `;
       
       const users = await database.query(query, [email]);
-      return users.length > 0 ? snakeToCamel(users[0]) : null;
+      if (users.length > 0) {
+        const camel = snakeToCamel(users[0]);
+        if (camel.isActive !== undefined) {
+          camel.isActive = camel.isActive === true || camel.isActive === 1;
+        }
+        return camel;
+      }
+      return null;
 
     } catch (error) {
       throw error;

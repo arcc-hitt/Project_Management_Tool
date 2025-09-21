@@ -83,8 +83,8 @@ class SearchService {
       sqlQuery += ` ORDER BY p.created_at DESC LIMIT ?`;
       queryParams.push(limit);
       
-      const [rows] = await database.query(sqlQuery, queryParams);
-      return rows.map(row => snakeToCamel(row));
+  const rows = await database.query(sqlQuery, queryParams);
+  return rows.map(row => snakeToCamel(row));
       
     } catch (error) {
       throw error;
@@ -122,8 +122,8 @@ class SearchService {
       sqlQuery += ` ORDER BY t.created_at DESC LIMIT ?`;
       queryParams.push(limit);
       
-      const [rows] = await database.query(sqlQuery, queryParams);
-      return rows.map(row => snakeToCamel(row));
+  const rows = await database.query(sqlQuery, queryParams);
+  return rows.map(row => snakeToCamel(row));
       
     } catch (error) {
       throw error;
@@ -148,8 +148,8 @@ class SearchService {
       
       const queryParams = [`%${query}%`, `%${query}%`, `%${query}%`, limit];
       
-      const [rows] = await database.query(sqlQuery, queryParams);
-      return rows.map(row => snakeToCamel(row));
+  const rows = await database.query(sqlQuery, queryParams);
+  return rows.map(row => snakeToCamel(row));
       
     } catch (error) {
       throw error;
@@ -186,8 +186,8 @@ class SearchService {
       sqlQuery += ` ORDER BY c.created_at DESC LIMIT ?`;
       queryParams.push(limit);
       
-      const [rows] = await database.query(sqlQuery, queryParams);
-      return rows.map(row => snakeToCamel(row));
+  const rows = await database.query(sqlQuery, queryParams);
+  return rows.map(row => snakeToCamel(row));
       
     } catch (error) {
       throw error;

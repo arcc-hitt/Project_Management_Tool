@@ -623,4 +623,12 @@ router.put('/:id/members/:userId/role',
   projectController.updateMemberRole
 );
 
+// Compatibility route: allow updating member role without the `/role` suffix
+// Some clients/tests may call PUT /api/projects/:id/members/:userId
+router.put('/:id/members/:userId',
+  authenticateToken,
+  updateMemberRoleValidation,
+  projectController.updateMemberRole
+);
+
 export default router;

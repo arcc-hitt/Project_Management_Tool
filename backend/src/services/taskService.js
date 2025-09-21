@@ -255,21 +255,29 @@ class TaskService {
    */
   async addComment(taskId, content, userId, userRole) {
     try {
-      // Check if task exists and user has access
-      const task = await this.getTaskById(taskId, userId, userRole);
-      if (!task) {
-        throw new Error('Task not found or access denied');
+      // Ensure task exists
+      const existing = await Task.findById(taskId);
+      if (!existing) {
+        throw new Error('Task not found');
+      }
+
+      // Check access for developers
+      if (userRole === 'developer') {
+        const hasAccess = await Task.hasUserAccess(taskId, userId);
+        if (!hasAccess) {
+          throw new Error('Access denied to this task');
+        }
       }
 
       // Add comment using model
       await Comment.create({
         taskId,
         userId,
-        content
+        comment: content
       });
 
-      // Return updated task with comments
-      return await this.getTaskById(taskId, userId, userRole);
+  // Return updated task with comments
+  return await this.getTaskById(taskId, userId, userRole);
 
     } catch (error) {
       throw error;
@@ -298,7 +306,7 @@ class TaskService {
       }
 
       // Update comment using model
-      await Comment.update(commentId, { content });
+  await Comment.update(commentId, { comment: content });
 
       // Return updated comment
       return await Comment.findById(commentId);
