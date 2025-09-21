@@ -16,7 +16,8 @@ export interface Project {
   description: string;
   startDate: string;
   endDate?: string;
-  status: 'planning' | 'in-progress' | 'completed' | 'on-hold';
+  status: 'planning' | 'active' | 'on_hold' | 'completed' | 'cancelled';
+  priority: 'low' | 'medium' | 'high' | 'critical';
   managerId: number;
   manager?: User;
   createdAt: string;
@@ -29,8 +30,8 @@ export interface Task {
   id: number;
   title: string;
   description: string;
-  status: 'todo' | 'in-progress' | 'review' | 'done';
-  priority: 'low' | 'medium' | 'high' | 'urgent';
+  status: 'todo' | 'in_progress' | 'review' | 'done';
+  priority: 'low' | 'medium' | 'high' | 'critical';
   projectId: number;
   assigneeId?: number;
   assignee?: User;
