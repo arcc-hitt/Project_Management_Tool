@@ -9,8 +9,8 @@ import {
   Clock,
   TrendingUp,
   AlertTriangle,
-  Target,
-  ArrowRight
+  ArrowRight,
+  Bell
 } from 'lucide-react';
 import {
   BarChart,
@@ -30,6 +30,7 @@ import { format, subDays, isAfter } from 'date-fns';
 import type { Project, Task } from '../types';
 import { projectService } from '../services/projectService';
 import { taskService } from '../services/taskService';
+import { notificationService } from '../services/notificationService';
 import { toast } from 'sonner';
 
 const DashboardPage: React.FC = () => {
@@ -37,6 +38,7 @@ const DashboardPage: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const [notificationStats, setNotificationStats] = useState<{ total: number; unread: number } | null>(null);
 
   useEffect(() => {
     fetchDashboardData();
@@ -46,14 +48,16 @@ const DashboardPage: React.FC = () => {
     try {
       setLoading(true);
 
-      // Fetch projects and tasks
-      const [projectResponse, taskResponse] = await Promise.all([
+      // Fetch projects, tasks, and notifications
+      const [projectResponse, taskResponse, notificationStatsResponse] = await Promise.all([
         projectService.getProjects({ limit: 50 }),
-        taskService.getTasks({ limit: 100 })
+        taskService.getTasks({ limit: 100 }),
+        notificationService.getNotificationStats().catch(() => ({ total: 0, unread: 0 }))
       ]);
 
       setProjects(projectResponse.projects);
       setTasks(taskResponse.tasks);
+      setNotificationStats(notificationStatsResponse);
 
       // Mock recent activity
       setRecentActivity([
@@ -207,11 +211,10 @@ const DashboardPage: React.FC = () => {
           trend={{ value: 3, isPositive: true }}
         />
         <StatCard
-          title="Completion Rate"
-          value={`${stats.completionRate}%`}
-          description="This month"
-          icon={Target}
-          trend={{ value: 5, isPositive: true }}
+          title="Notifications"
+          value={notificationStats?.total || 0}
+          description={`${notificationStats?.unread || 0} unread`}
+          icon={Bell}
         />
       </div>
 

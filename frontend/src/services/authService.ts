@@ -6,6 +6,22 @@ import type {
   User 
 } from '../types';
 
+export interface UpdatePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export interface ResetPasswordRequest {
+  token: string;
+  newPassword: string;
+}
+
+export interface UpdateProfileRequest {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+}
+
 export const authService = {
   async login(credentials: LoginRequest): Promise<AuthResponse> {
     const response = await apiClient.post<AuthResponse>('/auth/login', credentials);
@@ -85,8 +101,34 @@ export const authService = {
     }
   },
 
-  async updateProfile(userData: Partial<User>): Promise<User> {
-    const response = await apiClient.put<User>('/auth/profile', userData);
+  async verifyToken(): Promise<{ valid: boolean; user?: User }> {
+    const response = await apiClient.get<{ valid: boolean; user?: User }>('/auth/verify');
+    
+    if (!response.success) {
+      throw new Error(response.message || 'Token verification failed');
+    }
+    
+    return response.data || { valid: false };
+  },
+
+  async sendEmailVerification(): Promise<void> {
+    const response = await apiClient.post('/auth/send-verification');
+    
+    if (!response.success) {
+      throw new Error(response.message || 'Failed to send verification email');
+    }
+  },
+
+  async requestPasswordReset(email: string): Promise<void> {
+    const response = await apiClient.post('/auth/request-password-reset', { email });
+    
+    if (!response.success) {
+      throw new Error(response.message || 'Password reset request failed');
+    }
+  },
+
+  async updateProfile(data: UpdateProfileRequest): Promise<User> {
+    const response = await apiClient.put<User>('/auth/update-profile', data);
     
     if (!response.success || !response.data) {
       throw new Error(response.message || 'Profile update failed');
@@ -95,15 +137,16 @@ export const authService = {
     return response.data;
   },
 
-  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
-    const response = await apiClient.post('/auth/change-password', {
-      currentPassword,
-      newPassword
-    });
+  async updatePassword(data: UpdatePasswordRequest): Promise<void> {
+    const response = await apiClient.put('/auth/update-password', data);
     
     if (!response.success) {
-      throw new Error(response.message || 'Password change failed');
+      throw new Error(response.message || 'Password update failed');
     }
+  },
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    return this.updatePassword({ currentPassword, newPassword });
   }
 };
 

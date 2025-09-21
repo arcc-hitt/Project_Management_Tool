@@ -166,6 +166,21 @@ npm run test:e2e
 - Import `postman_collection.json` and `postman_environment.json` from the repo root.
 - Update the environment base URL to `http://localhost:5000/api` if needed.
 
+## Test Accounts (seed data)
+
+After running the seed script, you can log in with these sample users. All accounts share the same password set by the seed script.
+
+- Admin: admin@example.com / Password123
+- Manager: john.manager@example.com / Password123
+- Developer: sarah.dev@example.com / Password123
+- Developer: mike.dev@example.com / Password123
+- Developer: jane.dev@example.com / Password123
+
+Notes:
+- Make sure you ran migrations and then seeds (backend: `npm run migrate` then `npm run seed`).
+- In Docker, you can seed with: `docker exec -it project-mgmt-backend npm run seed`.
+- The seed script updates any placeholder hashes to the plaintext password above.
+
 ## Notable API Endpoints
 
 - Auth: `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/me`

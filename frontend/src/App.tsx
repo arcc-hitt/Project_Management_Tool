@@ -16,6 +16,7 @@ import UsersPage from './pages/UsersPage';
 import SearchPage from './pages/SearchPage';
 import TimeTrackingPage from './pages/TimeTrackingPage';
 import ActivityPage from './pages/ActivityPage';
+import NotificationsPage from './pages/NotificationsPage';
 import SettingsPage from './pages/SettingsPage';
 
 // Create a client
@@ -66,6 +67,7 @@ function App() {
                 <Route path="search" element={<SearchPage />} />
                 <Route path="time-tracking" element={<TimeTrackingPage />} />
                 <Route path="activity" element={<ActivityPage />} />
+                <Route path="notifications" element={<NotificationsPage />} />
                 <Route path="settings" element={<SettingsPage />} />
               </Route>
 

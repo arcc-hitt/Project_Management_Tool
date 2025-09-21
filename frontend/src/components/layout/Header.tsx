@@ -1,7 +1,7 @@
 import React from 'react';
 import { Menu } from 'lucide-react';
 import { Button } from '../ui/button';
-import NotificationsDropdown from '../features/NotificationsDropdown';
+import { NotificationBell } from '../notifications/NotificationBell';
 import OnlineUsersIndicator from '../features/OnlineUsersIndicator';
 
 export const Header: React.FC = () => {
@@ -24,7 +24,7 @@ export const Header: React.FC = () => {
           <OnlineUsersIndicator />
           
           {/* Notifications */}
-          <NotificationsDropdown />
+          <NotificationBell />
         </div>
       </div>
     </header>

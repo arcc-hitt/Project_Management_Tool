@@ -8,6 +8,7 @@ import {
   Search,
   Clock,
   Activity,
+  Bell,
   Settings,
   LogOut
 } from 'lucide-react';
@@ -22,6 +23,7 @@ const navigation = [
   { name: 'Search', href: '/search', icon: Search },
   { name: 'Time Tracking', href: '/time-tracking', icon: Clock },
   { name: 'Activity', href: '/activity', icon: Activity },
+  { name: 'Notifications', href: '/notifications', icon: Bell },
 ];
 
 export const Sidebar: React.FC = () => {
