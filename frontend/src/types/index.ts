@@ -30,7 +30,7 @@ export interface Task {
   id: number;
   title: string;
   description: string;
-  status: 'todo' | 'in_progress' | 'review' | 'done';
+  status: 'todo' | 'in_progress' | 'in_review' | 'done';
   priority: 'low' | 'medium' | 'high' | 'critical';
   projectId: number;
   assigneeId?: number;

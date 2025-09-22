@@ -69,8 +69,7 @@ export const authService = {
     try {
       await apiClient.post('/auth/logout');
     } catch (error) {
-      // Don't throw error on logout - just log it
-      console.error('Logout API call failed:', error);
+      // Don't throw error on logout - just log it silently
     }
   },
 
