@@ -8,13 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
+import { Pagination } from '../components/ui/pagination';
 import { projectService } from '../services/projectService';
-import { useDebounce } from '../hooks/useDebounce';
 import type { Project } from '../types';
 import { toast } from 'sonner';
 
 const ProjectsPage: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [allProjects, setAllProjects] = useState<Project[]>([]); // Store all fetched projects for client-side filtering
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchTerm, setSearchTerm] = useState('');
@@ -22,8 +23,33 @@ const ProjectsPage: React.FC = () => {
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 
-  // Debounce search term to prevent API calls on every keystroke
-  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+
+  // Remove debounced search - we'll use real-time filtering instead
+
+  // Client-side search filtering function
+  const applySearchFilter = (projectList: Project[]) => {
+    if (!searchTerm.trim()) {
+      return projectList;
+    }
+    
+    const searchLower = searchTerm.toLowerCase();
+    return projectList.filter(project => 
+      project.name.toLowerCase().includes(searchLower) ||
+      (project.description && project.description.toLowerCase().includes(searchLower))
+    );
+  };
+
+  // Real-time search effect
+  useEffect(() => {
+    if (allProjects.length > 0) {
+      const filteredProjects = applySearchFilter(allProjects);
+      setProjects(filteredProjects);
+    }
+  }, [searchTerm, allProjects]);
 
   // Create project form state
   const [createForm, setCreateForm] = useState({
@@ -36,18 +62,51 @@ const ProjectsPage: React.FC = () => {
 
   useEffect(() => {
     fetchProjects();
-  }, [statusFilter, priorityFilter, debouncedSearchTerm]);
+  }, [statusFilter, priorityFilter, currentPage]);
+
+  // Real-time filtering when search term changes
+  useEffect(() => {
+    if (currentPage !== 1) {
+      setCurrentPage(1); // Reset to page 1 when search changes
+    }
+  }, [searchTerm]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    if (currentPage !== 1) {
+      setCurrentPage(1);
+    }
+  }, [statusFilter, priorityFilter]);
 
   const fetchProjects = async () => {
     try {
       setLoading(true);
       const filters = {
-        search: debouncedSearchTerm || undefined,
+        // No search filter - we'll do client-side filtering
         status: statusFilter !== 'all' ? statusFilter : undefined,
-        priority: priorityFilter !== 'all' ? priorityFilter : undefined
+        priority: priorityFilter !== 'all' ? priorityFilter : undefined,
+        page: currentPage,
+        limit: 12 // Show 12 projects per page (good for grid layout)
       };
       const response = await projectService.getProjects(filters);
-      setProjects(response.projects);
+      
+      // Store all projects for client-side filtering
+      if (currentPage === 1) {
+        setAllProjects(response.projects);
+      } else {
+        // For pagination, append to existing projects
+        setAllProjects(prev => [...prev, ...response.projects]);
+      }
+      
+      // Apply search filter to display
+      const filteredProjects = applySearchFilter(response.projects);
+      setProjects(filteredProjects);
+      
+      // Update pagination state
+      if (response.pagination) {
+        setTotalPages(response.pagination.totalPages);
+        setTotalItems(response.pagination.totalItems);
+      }
     } catch (error: any) {
       toast.error(error.message || 'Failed to fetch projects');
       // For demo purposes, show mock data when backend is not available
@@ -111,6 +170,8 @@ const ProjectsPage: React.FC = () => {
         startDate: '',
         endDate: ''
       });
+      // Reset to page 1 to show the new project
+      setCurrentPage(1);
       fetchProjects();
     } catch (error: any) {
       toast.error(error.message || 'Failed to create project');
@@ -347,14 +408,27 @@ const ProjectsPage: React.FC = () => {
           </p>
         </div>
       ) : (
-        <div className={viewMode === 'grid' 
-          ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' 
-          : 'space-y-4'
-        }>
-          {projects.map((project) => (
-            <ProjectCard key={project.id} project={project} />
-          ))}
-        </div>
+        <>
+          <div className={viewMode === 'grid' 
+            ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' 
+            : 'space-y-4'
+          }>
+            {projects.map((project) => (
+              <ProjectCard key={project.id} project={project} />
+            ))}
+          </div>
+          
+          {/* Pagination Controls */}
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            itemsPerPage={12}
+            onPageChange={setCurrentPage}
+            itemName="projects"
+            className="mt-8"
+          />
+        </>
       )}
     </div>
   );

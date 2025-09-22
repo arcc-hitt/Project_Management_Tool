@@ -102,7 +102,7 @@ const DashboardPage: React.FC = () => {
         { id: 1, title: 'Setup project structure', status: 'done', priority: 'high', projectId: 1, createdAt: '', updatedAt: '', description: '' },
         { id: 2, title: 'Design database schema', status: 'in_progress', priority: 'medium', projectId: 1, createdAt: '', updatedAt: '', description: '' },
         { id: 3, title: 'Implement authentication', status: 'todo', priority: 'high', projectId: 1, createdAt: '', updatedAt: '', description: '' },
-        { id: 4, title: 'Setup deployment', status: 'review', priority: 'medium', projectId: 1, createdAt: '', updatedAt: '', description: '' }
+        { id: 4, title: 'Setup deployment', status: 'in_review', priority: 'medium', projectId: 1, createdAt: '', updatedAt: '', description: '' }
       ]);
     } finally {
       setLoading(false);
@@ -125,7 +125,7 @@ const DashboardPage: React.FC = () => {
   const taskStatusData = [
     { name: 'To Do', value: tasks.filter(t => t.status === 'todo').length, color: '#94a3b8' },
     { name: 'In Progress', value: tasks.filter(t => t.status === 'in_progress').length, color: '#3b82f6' },
-    { name: 'Review', value: tasks.filter(t => t.status === 'review').length, color: '#f59e0b' },
+    { name: 'Review', value: tasks.filter(t => t.status === 'in_review').length, color: '#f59e0b' },
     { name: 'Done', value: tasks.filter(t => t.status === 'done').length, color: '#10b981' }
   ];
 

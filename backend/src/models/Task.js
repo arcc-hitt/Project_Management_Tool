@@ -148,11 +148,11 @@ class Task {
         values.push(searchTerm, searchTerm);
       }
 
-    // Add ordering with sanitization
-    const allowedOrderBy = new Set(['created_at', 'updated_at', 'due_date', 'priority', 'status']);
-    const orderBy = allowedOrderBy.has(options.orderBy) ? options.orderBy : 'created_at';
-    const orderDir = (options.orderDir || 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
-    query += ` ORDER BY t.${orderBy} ${orderDir}`;
+      // Add ordering with sanitization
+      const allowedOrderBy = new Set(['created_at', 'updated_at', 'due_date', 'priority', 'status']);
+      const orderBy = allowedOrderBy.has(options.orderBy) ? options.orderBy : 'created_at';
+      const orderDir = (options.orderDir || 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+      query += ` ORDER BY t.${orderBy} ${orderDir}`;
 
       // Add pagination
       if (options.limit) {
@@ -165,8 +165,11 @@ class Task {
         }
       }
 
-  const rows = await database.query(query, values);
-      return rows.map(row => new Task(row));
+      const rows = await database.query(query, values);
+      
+      const tasks = rows.map(row => new Task(row));
+      
+      return tasks;
     } catch (error) {
       throw new Error(`Error finding tasks: ${error.message}`);
     }

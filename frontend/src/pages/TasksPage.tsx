@@ -10,14 +10,15 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Pagination } from '../components/ui/pagination';
 import { taskService } from '../services/taskService';
 import { projectService } from '../services/projectService';
-import { useDebounce } from '../hooks/useDebounce';
 import type { Task, Project } from '../types';
 import { toast } from 'sonner';
 
 const TasksPage: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [allTasks, setAllTasks] = useState<Task[]>([]); // Store all fetched tasks for client-side filtering
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
@@ -25,9 +26,34 @@ const TasksPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
 
-  // Debounce search term to prevent API calls on every keystroke
-  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+  // Remove debounced search - we'll use real-time filtering instead
+
+  // Client-side search filtering function
+  const applySearchFilter = (taskList: Task[]) => {
+    if (!searchTerm.trim()) {
+      return taskList;
+    }
+    
+    const searchLower = searchTerm.toLowerCase();
+    return taskList.filter(task => 
+      task.title.toLowerCase().includes(searchLower) ||
+      (task.description && task.description.toLowerCase().includes(searchLower))
+    );
+  };
+
+  // Real-time search effect
+  useEffect(() => {
+    if (allTasks.length > 0) {
+      const filteredTasks = applySearchFilter(allTasks);
+      setTasks(filteredTasks);
+    }
+  }, [searchTerm, allTasks]);
 
   // Create task form state
   const [createForm, setCreateForm] = useState({
@@ -42,18 +68,46 @@ const TasksPage: React.FC = () => {
   useEffect(() => {
     fetchTasks();
     fetchProjects();
-  }, [statusFilter, priorityFilter, debouncedSearchTerm]);
+  }, [statusFilter, priorityFilter, currentPage]);
+
+  // Real-time filtering when search term changes
+  useEffect(() => {
+    if (currentPage !== 1) {
+      setCurrentPage(1); // Reset to page 1 when search changes
+    }
+  }, [searchTerm]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    if (currentPage !== 1) {
+      setCurrentPage(1);
+    }
+  }, [statusFilter, priorityFilter]);
 
   const fetchTasks = async () => {
     try {
       setLoading(true);
       const filters = {
-        search: debouncedSearchTerm || undefined,
+        // Don't send search to API - we'll filter client-side for real-time results
         status: statusFilter !== 'all' ? statusFilter : undefined,
-        priority: priorityFilter !== 'all' ? priorityFilter : undefined
+        priority: priorityFilter !== 'all' ? priorityFilter : undefined,
+        page: currentPage,
+        limit: 10
       };
       const response = await taskService.getTasks(filters);
-      setTasks(response.tasks);
+      
+      // Store all tasks for client-side filtering
+      setAllTasks(response.tasks);
+      
+      // Apply client-side search filtering
+      const filteredTasks = applySearchFilter(response.tasks);
+      setTasks(filteredTasks);
+      
+      // Update pagination state
+      if (response.pagination) {
+        setTotalPages(response.pagination.totalPages);
+        setTotalItems(response.pagination.totalItems);
+      }
     } catch (error: any) {
       toast.error(error.message || 'Failed to fetch tasks');
       // Mock data for demo
@@ -92,7 +146,7 @@ const TasksPage: React.FC = () => {
           id: 3,
           title: 'Implement authentication',
           description: 'Build user authentication system with JWT',
-          status: 'review',
+          status: 'in_review',
           priority: 'high',
           projectId: 1,
           assigneeId: 1,
@@ -129,7 +183,6 @@ const TasksPage: React.FC = () => {
       const response = await projectService.getProjects({ limit: 50 });
       setProjects(response.projects);
     } catch (error: any) {
-      console.error('Failed to fetch projects:', error);
       // Mock projects for demo
       setProjects([
         { id: 1, name: 'Project Management Tool', description: 'Main project', status: 'active', priority: 'high', startDate: '2025-01-01', managerId: 1, createdAt: '', updatedAt: '' },
@@ -169,6 +222,9 @@ const TasksPage: React.FC = () => {
         dueDate: '',
         estimatedHours: 0
       });
+      
+      // Reset to page 1 to show the new task (which should be first due to newest-first sorting)
+      setCurrentPage(1);
       fetchTasks();
     } catch (error: any) {
       toast.error(error.message || 'Failed to create task');
@@ -189,7 +245,7 @@ const TasksPage: React.FC = () => {
     switch (status) {
       case 'todo': return 'bg-gray-100 text-gray-800 border-gray-200';
       case 'in_progress': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'review': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'in_review': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
       case 'done': return 'bg-green-100 text-green-800 border-green-200';
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
@@ -223,7 +279,7 @@ const TasksPage: React.FC = () => {
               <DropdownMenuItem onClick={() => handleUpdateTaskStatus(task.id, 'in_progress')}>
                 Move to In Progress
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleUpdateTaskStatus(task.id, 'review')}>
+              <DropdownMenuItem onClick={() => handleUpdateTaskStatus(task.id, 'in_review')}>
                 Move to Review
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleUpdateTaskStatus(task.id, 'done')}>
@@ -271,7 +327,7 @@ const TasksPage: React.FC = () => {
     const columns = [
       { id: 'todo', title: 'To Do', status: 'todo' },
       { id: 'in_progress', title: 'In Progress', status: 'in_progress' },
-      { id: 'review', title: 'Review', status: 'review' },
+      { id: 'in_review', title: 'Review', status: 'in_review' },
       { id: 'done', title: 'Done', status: 'done' }
     ];
 
@@ -434,7 +490,7 @@ const TasksPage: React.FC = () => {
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="todo">To Do</SelectItem>
               <SelectItem value="in_progress">In Progress</SelectItem>
-              <SelectItem value="review">Review</SelectItem>
+              <SelectItem value="in_review">Review</SelectItem>
               <SelectItem value="done">Done</SelectItem>
             </SelectContent>
           </Select>
@@ -461,7 +517,29 @@ const TasksPage: React.FC = () => {
         </TabsList>
         
         <TabsContent value="kanban" className="mt-6">
-          <KanbanBoard />
+          {tasks.length === 0 ? (
+            <div className="text-center py-12">
+              <h3 className="text-lg font-medium">No tasks found</h3>
+              <p className="text-muted-foreground mt-2">
+                Get started by creating your first task.
+              </p>
+            </div>
+          ) : (
+            <>
+              <KanbanBoard />
+              
+              {/* Pagination Controls for Kanban */}
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={totalItems}
+                itemsPerPage={10}
+                onPageChange={setCurrentPage}
+                itemName="tasks"
+                className="mt-6"
+              />
+            </>
+          )}
         </TabsContent>
         
         <TabsContent value="list" className="mt-6">
@@ -473,11 +551,24 @@ const TasksPage: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {tasks.map((task) => (
-                <TaskCard key={task.id} task={task} />
-              ))}
-            </div>
+            <>
+              <div className="space-y-4">
+                {tasks.map((task) => (
+                  <TaskCard key={task.id} task={task} />
+                ))}
+              </div>
+              
+              {/* Pagination Controls for List */}
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={totalItems}
+                itemsPerPage={10}
+                onPageChange={setCurrentPage}
+                itemName="tasks"
+                className="mt-6"
+              />
+            </>
           )}
         </TabsContent>
       </Tabs>

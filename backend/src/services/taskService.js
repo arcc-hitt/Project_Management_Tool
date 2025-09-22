@@ -72,7 +72,7 @@ class TaskService {
       const paginatedTasks = tasks.slice(startIndex, endIndex);
       const totalTasks = tasks.length;
 
-      return {
+      const result = {
         tasks: paginatedTasks,
         pagination: {
           totalItems: totalTasks,
@@ -83,6 +83,8 @@ class TaskService {
           hasPrevPage: page > 1
         }
       };
+
+      return result;
 
     } catch (error) {
       throw error;
