@@ -1,6 +1,5 @@
 import database from '../config/database.js';
 import { config } from '../config/config.js';
-import bcrypt from 'bcryptjs';
 import { fileURLToPath } from 'url';
 import path from 'path';
 
@@ -67,21 +66,7 @@ const runSeeds = async () => {
     }
     await database.query('SET FOREIGN_KEY_CHECKS=1');
 
-    // After raw inserts, update seeded users' password_hash to bcrypt for 'Password123'
-    try {
-      const OLD_HASH = '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj1JQxNj8xzq'; // hash for 'password123'
-      const salt = bcrypt.genSaltSync(12);
-      const newHash = bcrypt.hashSync('Password123', salt);
-
-      const result = await database.query(
-        'UPDATE users SET password_hash = ? WHERE password_hash = ?',[newHash, OLD_HASH]
-      );
-      // result may be OkPacket; log affectedRows when available
-      const affected = typeof result?.affectedRows === 'number' ? result.affectedRows : (result?.info || 'unknown');
-      console.log(`Updated seeded user password hashes to 'Password123' (affected: ${affected})`);
-    } catch (err) {
-      console.warn('Post-seed password update skipped or failed:', err.message);
-    }
+    console.log('Sample data has been inserted successfully');
 
     // Summary counts
     try {

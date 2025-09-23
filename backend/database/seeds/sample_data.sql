@@ -5,13 +5,13 @@ USE project_management_tool;
 
 -- Insert sample users
 INSERT INTO users (email, password_hash, first_name, last_name, role, is_active) VALUES
-('admin@example.com', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj1JQxNj8xzq', 'Admin', 'User', 'admin', TRUE),
-('john.manager@example.com', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj1JQxNj8xzq', 'John', 'Manager', 'manager', TRUE),
-('sarah.dev@example.com', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj1JQxNj8xzq', 'Sarah', 'Developer', 'developer', TRUE),
-('mike.dev@example.com', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj1JQxNj8xzq', 'Mike', 'Developer', 'developer', TRUE),
-('jane.dev@example.com', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj1JQxNj8xzq', 'Jane', 'Developer', 'developer', TRUE);
+('admin@example.com', '$2b$12$bGD36joSWSB4m/EHEhWCCOtJsJCssmZoqgwrnlSxAMQaS7Fb5FJMy', 'Admin', 'User', 'admin', TRUE),
+('john.manager@example.com', '$2b$12$bGD36joSWSB4m/EHEhWCCOtJsJCssmZoqgwrnlSxAMQaS7Fb5FJMy', 'John', 'Manager', 'manager', TRUE),
+('sarah.dev@example.com', '$2b$12$bGD36joSWSB4m/EHEhWCCOtJsJCssmZoqgwrnlSxAMQaS7Fb5FJMy', 'Sarah', 'Developer', 'developer', TRUE),
+('mike.dev@example.com', '$2b$12$bGD36joSWSB4m/EHEhWCCOtJsJCssmZoqgwrnlSxAMQaS7Fb5FJMy', 'Mike', 'Developer', 'developer', TRUE),
+('jane.dev@example.com', '$2b$12$bGD36joSWSB4m/EHEhWCCOtJsJCssmZoqgwrnlSxAMQaS7Fb5FJMy', 'Jane', 'Developer', 'developer', TRUE);
 
--- Note: The hash above corresponds to an old default ('password123'). The seed script updates these to 'Password123' post-insert.
+-- Note: All users use the password 'Password123!' for demonstration purposes.
 
 -- Insert sample projects
 INSERT INTO projects (name, description, status, priority, start_date, end_date, created_by) VALUES

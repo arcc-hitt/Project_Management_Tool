@@ -47,7 +47,7 @@ test.describe('Authentication Flow', () => {
     
     // Fill in credentials
     await page.getByPlaceholder(/email/i).fill('test@example.com');
-  await page.getByPlaceholder(/password/i).fill('Password123');
+  await page.getByPlaceholder(/password/i).fill('Password123!');
     
     // Submit form
     await page.getByRole('button', { name: /sign in/i }).click();
