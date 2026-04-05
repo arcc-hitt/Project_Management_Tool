@@ -44,7 +44,7 @@ class NotificationService {
       if (filters?.offset) params.append('offset', filters.offset.toString());
 
       const response = await apiClient.get(`/notifications?${params.toString()}`);
-      return response.data.data;
+      return response.data as { notifications: Notification[]; total: number };
     } catch (error) {
       console.error('Error fetching user notifications:', error);
       throw error;
@@ -57,7 +57,7 @@ class NotificationService {
   async getNotificationById(id: number): Promise<Notification> {
     try {
       const response = await apiClient.get(`/notifications/${id}`);
-      return response.data.data.notification;
+      return (response.data as { notification: Notification }).notification;
     } catch (error) {
       console.error('Error fetching notification:', error);
       throw error;
@@ -106,7 +106,7 @@ class NotificationService {
   async getNotificationStats(): Promise<NotificationStats> {
     try {
       const response = await apiClient.get('/notifications/stats');
-      return response.data.data;
+      return response.data as NotificationStats;
     } catch (error) {
       console.error('Error fetching notification stats:', error);
       throw error;
@@ -122,7 +122,7 @@ class NotificationService {
         taskId,
         assigneeId
       });
-      return response.data.data.notification;
+      return (response.data as { notification: Notification }).notification;
     } catch (error) {
       console.error('Error creating task assigned notification:', error);
       throw error;
@@ -138,7 +138,7 @@ class NotificationService {
         taskId,
         changes
       });
-      return response.data.data.notification;
+      return (response.data as { notification: Notification }).notification;
     } catch (error) {
       console.error('Error creating task updated notification:', error);
       throw error;
@@ -153,7 +153,7 @@ class NotificationService {
       const response = await apiClient.post('/notifications/task-completed', {
         taskId
       });
-      return response.data.data.notification;
+      return (response.data as { notification: Notification }).notification;
     } catch (error) {
       console.error('Error creating task completed notification:', error);
       throw error;
@@ -166,7 +166,7 @@ class NotificationService {
   async getUnreadCount(): Promise<number> {
     try {
       const response = await apiClient.get('/notifications/unread-count');
-      return response.data.data.count;
+      return (response.data as { count: number }).count;
     } catch (error) {
       console.error('Error fetching unread count:', error);
       throw error;
@@ -179,7 +179,7 @@ class NotificationService {
   async cleanupOldNotifications(days: number = 30): Promise<{ deleted: number }> {
     try {
       const response = await apiClient.delete(`/notifications/cleanup?days=${days}`);
-      return response.data.data;
+      return response.data as { deleted: number };
     } catch (error) {
       console.error('Error cleaning up old notifications:', error);
       throw error;
@@ -192,7 +192,7 @@ class NotificationService {
   async getNotificationPreferences(): Promise<any> {
     try {
       const response = await apiClient.get('/notifications/preferences');
-      return response.data.data;
+      return response.data;
     } catch (error) {
       console.error('Error fetching notification preferences:', error);
       throw error;
@@ -205,7 +205,7 @@ class NotificationService {
   async updateNotificationPreferences(preferences: any): Promise<any> {
     try {
       const response = await apiClient.put('/notifications/preferences', preferences);
-      return response.data.data;
+      return response.data;
     } catch (error) {
       console.error('Error updating notification preferences:', error);
       throw error;
@@ -276,7 +276,7 @@ class NotificationService {
         responseType: 'blob'
       });
       
-      return response.data;
+      return response as unknown as Blob;
     } catch (error) {
       console.error('Error exporting notifications:', error);
       throw error;

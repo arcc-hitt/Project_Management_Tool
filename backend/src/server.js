@@ -1,4 +1,5 @@
 import express from 'express';
+import http from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -10,6 +11,7 @@ import { config } from './config/config.js';
 import database from './config/database.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 import { limiter } from './middleware/rateLimiter.js';
+import { initSocketIO } from './realtime/socket.js';
 
 // Import routes
 import authRoutes from './routes/auth.js';
@@ -113,8 +115,11 @@ const startServer = async () => {
     // Connect to database
     await database.connect();
     
-    // Start server
-    const server = app.listen(config.port, () => {
+    // Start HTTP + Socket.IO server
+    const httpServer = http.createServer(app);
+    initSocketIO(httpServer);
+
+    httpServer.listen(config.port, () => {
       console.log(`Server running on port ${config.port} in ${config.nodeEnv} mode`);
       console.log(`API Documentation: http://localhost:${config.port}/api/docs`);
     });
@@ -123,7 +128,7 @@ const startServer = async () => {
     const gracefulShutdown = async (signal) => {
   console.log(`\nReceived ${signal}. Starting graceful shutdown...`);
       
-      server.close(async () => {
+        httpServer.close(async () => {
   console.log('HTTP server closed');
         
         try {

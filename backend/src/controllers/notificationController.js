@@ -108,10 +108,17 @@ export const getNotificationStats = asyncHandler(async (req, res) => {
   const now = new Date();
   const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
+  const byType = all.reduce((acc, notification) => {
+    const key = notification.type || 'unknown';
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+
   const stats = {
     total: all.length,
     unread: all.filter((n) => !n.isRead).length,
     read: all.filter((n) => n.isRead).length,
+    byType,
     task_notifications: all.filter((n) => n.type === 'task').length,
     project_notifications: all.filter((n) => n.type === 'project').length,
     deadline_notifications: all.filter((n) => n.type === 'deadline').length,
@@ -119,7 +126,22 @@ export const getNotificationStats = asyncHandler(async (req, res) => {
     today: all.filter((n) => n.createdAt && new Date(n.createdAt) >= dayAgo).length,
   };
 
-  res.status(200).json({ success: true, data: { stats }, message: 'Notification statistics retrieved successfully' });
+  res.status(200).json({
+    success: true,
+    data: stats,
+    message: 'Notification statistics retrieved successfully',
+  });
+});
+
+export const getUnreadCount = asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  const unread = await Notification.count({ userId, isRead: false });
+
+  res.status(200).json({
+    success: true,
+    data: { count: unread },
+    message: 'Unread notification count retrieved successfully',
+  });
 });
 
 export const bulkMarkAsRead = asyncHandler(async (req, res) => {
