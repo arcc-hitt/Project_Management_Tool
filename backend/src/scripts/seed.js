@@ -14,21 +14,62 @@ const runSeeds = async () => {
     const commentsCol = db.collection('task_comments');
     const notificationsCol = db.collection('notifications');
 
+    const samplePassword = 'Password123!';
+    const sampleUserBlueprints = [
+      { firstName: 'Admin', lastName: 'User', email: 'admin@example.com', role: 'admin' },
+      { firstName: 'Sarah', lastName: 'Manager', email: 'manager@example.com', role: 'manager' },
+      { firstName: 'John', lastName: 'Developer', email: 'dev1@example.com', role: 'developer' },
+      { firstName: 'Emma', lastName: 'Developer', email: 'dev2@example.com', role: 'developer' },
+    ];
+    const sampleEmails = sampleUserBlueprints.map((user) => user.email);
+
     const userCount = await usersCol.countDocuments();
     if (userCount > 0) {
-      console.log('Users collection is not empty, skipping seed insertion.');
+      const now = new Date();
+      const passwordHash = await bcrypt.hash(samplePassword, 10);
+      const existingSampleUsers = await usersCol
+        .find({ email: { $in: sampleEmails } })
+        .project({ _id: 1, email: 1 })
+        .toArray();
+
+      if (existingSampleUsers.length > 0) {
+        await usersCol.bulkWrite(
+          existingSampleUsers.map((user) => ({
+            updateOne: {
+              filter: { _id: user._id },
+              update: {
+                $set: {
+                  passwordHash,
+                  isActive: true,
+                  emailVerified: true,
+                  updatedAt: now,
+                },
+              },
+            },
+          }))
+        );
+
+        console.log(
+          `Updated ${existingSampleUsers.length} sample user password(s) to a frontend-compliant value.`
+        );
+      }
+
+      console.log('Users collection is not empty, skipping fresh seed insertion.');
       return;
     }
 
     const now = new Date();
-    const passwordHash = await bcrypt.hash('password123', 10);
+    const passwordHash = await bcrypt.hash(samplePassword, 10);
 
-    const users = [
-      { firstName: 'Admin', lastName: 'User', email: 'admin@example.com', role: 'admin', isActive: true, passwordHash, timezone: 'UTC', emailVerified: true, createdAt: now, updatedAt: now },
-      { firstName: 'Sarah', lastName: 'Manager', email: 'manager@example.com', role: 'manager', isActive: true, passwordHash, timezone: 'UTC', emailVerified: true, createdAt: now, updatedAt: now },
-      { firstName: 'John', lastName: 'Developer', email: 'dev1@example.com', role: 'developer', isActive: true, passwordHash, timezone: 'UTC', emailVerified: true, createdAt: now, updatedAt: now },
-      { firstName: 'Emma', lastName: 'Developer', email: 'dev2@example.com', role: 'developer', isActive: true, passwordHash, timezone: 'UTC', emailVerified: true, createdAt: now, updatedAt: now },
-    ];
+    const users = sampleUserBlueprints.map((user) => ({
+      ...user,
+      isActive: true,
+      passwordHash,
+      timezone: 'UTC',
+      emailVerified: true,
+      createdAt: now,
+      updatedAt: now,
+    }));
 
     const userResult = await usersCol.insertMany(users);
     const insertedUsers = Object.values(userResult.insertedIds).map((id) => id.toHexString());
