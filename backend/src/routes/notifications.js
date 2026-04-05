@@ -6,6 +6,7 @@ import {
   markAllAsRead,
   deleteNotification,
   getNotificationStats,
+  getUnreadCount,
   bulkMarkAsRead,
   bulkDelete,
   cleanupOldNotifications,
@@ -120,60 +121,6 @@ router.get('/',
 
 /**
  * @swagger
- * /api/notifications/{id}:
- *   get:
- *     summary: Get notification by ID
- *     tags: [Notifications]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: Notification ID
- *     responses:
- *       200:
- *         description: Notification retrieved successfully
- *       404:
- *         description: Notification not found
- */
-router.get('/:id', 
-  authenticateToken, 
-  validateNotificationId, 
-  getNotificationById
-);
-
-/**
- * @swagger
- * /api/notifications/{id}/read:
- *   patch:
- *     summary: Mark notification as read
- *     tags: [Notifications]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: Notification ID
- *     responses:
- *       200:
- *         description: Notification marked as read
- *       404:
- *         description: Notification not found
- */
-router.patch('/:id/read', 
-  authenticateToken, 
-  validateNotificationId, 
-  markAsRead
-);
-
-/**
- * @swagger
  * /api/notifications/mark-all-read:
  *   patch:
  *     summary: Mark all user notifications as read
@@ -187,33 +134,6 @@ router.patch('/:id/read',
 router.patch('/mark-all-read', 
   authenticateToken, 
   markAllAsRead
-);
-
-/**
- * @swagger
- * /api/notifications/{id}:
- *   delete:
- *     summary: Delete notification
- *     tags: [Notifications]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: Notification ID
- *     responses:
- *       200:
- *         description: Notification deleted successfully
- *       404:
- *         description: Notification not found
- */
-router.delete('/:id', 
-  authenticateToken, 
-  validateNotificationId, 
-  deleteNotification
 );
 
 /**
@@ -247,7 +167,7 @@ router.get('/stats',
  */
 router.get('/unread-count', 
   authenticateToken, 
-  getNotificationStats
+  getUnreadCount
 );
 
 /**
@@ -329,7 +249,7 @@ router.delete('/bulk-delete',
  */
 router.delete('/cleanup', 
   authenticateToken, 
-  authorize(['admin']), 
+  authorize('admin'), 
   cleanupOldNotifications
 );
 
@@ -405,6 +325,87 @@ router.put('/preferences',
 router.post('/test', 
   authenticateToken, 
   testNotification
+);
+
+/**
+ * @swagger
+ * /api/notifications/{id}:
+ *   get:
+ *     summary: Get notification by ID
+ *     tags: [Notifications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Notification ID
+ *     responses:
+ *       200:
+ *         description: Notification retrieved successfully
+ *       404:
+ *         description: Notification not found
+ */
+router.get('/:id', 
+  authenticateToken, 
+  validateNotificationId, 
+  getNotificationById
+);
+
+/**
+ * @swagger
+ * /api/notifications/{id}/read:
+ *   patch:
+ *     summary: Mark notification as read
+ *     tags: [Notifications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Notification ID
+ *     responses:
+ *       200:
+ *         description: Notification marked as read
+ *       404:
+ *         description: Notification not found
+ */
+router.patch('/:id/read', 
+  authenticateToken, 
+  validateNotificationId, 
+  markAsRead
+);
+
+/**
+ * @swagger
+ * /api/notifications/{id}:
+ *   delete:
+ *     summary: Delete notification
+ *     tags: [Notifications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Notification ID
+ *     responses:
+ *       200:
+ *         description: Notification deleted successfully
+ *       404:
+ *         description: Notification not found
+ */
+router.delete('/:id', 
+  authenticateToken, 
+  validateNotificationId, 
+  deleteNotification
 );
 
 export default router;

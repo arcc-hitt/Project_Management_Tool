@@ -1,0 +1,17 @@
+{
+  "name": "Project Management Tool",
+  "short_name": "PM Tool",
+  "description": "Manage projects, tasks, teams, and notifications.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0ea5a4",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

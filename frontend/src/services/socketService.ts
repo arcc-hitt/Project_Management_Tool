@@ -5,11 +5,12 @@ class SocketService {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectInterval = 1000;
+  private socketUrl = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
 
   connect(token?: string): Promise<Socket> {
     return new Promise((resolve, reject) => {
       try {
-        this.socket = io(process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000', {
+        this.socket = io(this.socketUrl, {
           auth: {
             token
           },
