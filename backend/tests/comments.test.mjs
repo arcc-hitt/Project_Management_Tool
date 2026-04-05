@@ -1,18 +1,10 @@
 import { describe, test, expect, beforeAll, beforeEach } from '@jest/globals';
 import request from 'supertest';
 import app from '../src/server.js';
-import database from '../src/config/database.js';
+import { cleanupUserByEmail, cleanupUsersByEmails, clearProjectDomainData } from './dbTestUtils.mjs';
 
 async function registerAndLogin(user) {
-  const existing = await database.query('SELECT id FROM users WHERE email = ? LIMIT 1', [user.email]);
-  if (existing.length) {
-    const uid = existing[0].id;
-    await database.query('DELETE FROM project_members WHERE user_id = ?', [uid]);
-    await database.query('DELETE FROM projects WHERE created_by = ?', [uid]);
-    await database.query('DELETE FROM tasks WHERE created_by = ? OR assigned_to = ?', [uid, uid]);
-    await database.query('DELETE FROM task_comments WHERE user_id = ?', [uid]);
-    await database.query('DELETE FROM users WHERE id = ?', [uid]);
-  }
+  await cleanupUserByEmail(user.email);
   const reg = await request(app).post('/api/auth/register').send(user).expect(201);
   const token = reg.body.data.token;
   const me = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${token}`).expect(200);
@@ -23,26 +15,13 @@ describe('Comments API', () => {
   let manager, dev, projectId, taskId;
 
   beforeAll(async () => {
-    for (const email of ['mgr-comments@example.com', 'dev-comments@example.com']) {
-      const rows = await database.query('SELECT id FROM users WHERE email = ? LIMIT 1', [email]);
-      if (rows.length) {
-        const uid = rows[0].id;
-        await database.query('DELETE FROM project_members WHERE user_id = ?', [uid]);
-        await database.query('DELETE FROM tasks WHERE created_by = ? OR assigned_to = ?', [uid, uid]);
-        await database.query('DELETE FROM task_comments WHERE user_id = ?', [uid]);
-        await database.query('DELETE FROM projects WHERE created_by = ?', [uid]);
-        await database.query('DELETE FROM users WHERE id = ?', [uid]);
-      }
-    }
+    await cleanupUsersByEmails(['mgr-comments@example.com', 'dev-comments@example.com']);
     manager = await registerAndLogin({ email: 'mgr-comments@example.com', password: 'Password123!', firstName: 'MgrC', lastName: 'User', role: 'manager' });
     dev = await registerAndLogin({ email: 'dev-comments@example.com', password: 'Password123!', firstName: 'DevC', lastName: 'User', role: 'developer' });
   });
 
   beforeEach(async () => {
-    await database.query('DELETE FROM project_members');
-    await database.query('DELETE FROM task_comments');
-    await database.query('DELETE FROM tasks');
-    await database.query('DELETE FROM projects');
+    await clearProjectDomainData();
 
     const createProj = await request(app)
       .post('/api/projects')

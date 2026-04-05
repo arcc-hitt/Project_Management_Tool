@@ -2,19 +2,11 @@ import { describe, test, expect, beforeAll, beforeEach } from '@jest/globals';
 import request from 'supertest';
 import app from '../src/server.js';
 import database from '../src/config/database.js';
+import { cleanupUserByEmail, cleanupUsersByEmails, clearProjectDomainData } from './dbTestUtils.mjs';
 
 // Helper to register and login a user, returning token and user
 async function registerAndLogin(user) {
-  // Clean dependent rows then user to avoid FK issues when re-running
-  const existing = await database.query('SELECT id FROM users WHERE email = ? LIMIT 1', [user.email]);
-  if (existing.length) {
-    const uid = existing[0].id;
-    await database.query('DELETE FROM project_members WHERE user_id = ?', [uid]);
-    await database.query('DELETE FROM projects WHERE created_by = ?', [uid]);
-    await database.query('DELETE FROM tasks WHERE created_by = ? OR assigned_to = ?', [uid, uid]);
-    await database.query('DELETE FROM notifications WHERE user_id = ?', [uid]);
-    await database.query('DELETE FROM users WHERE id = ?', [uid]);
-  }
+  await cleanupUserByEmail(user.email);
   const reg = await request(app).post('/api/auth/register').send(user).expect(201);
   const token = reg.body.data.token;
   const me = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${token}`).expect(200);
@@ -25,19 +17,7 @@ describe('Projects API', () => {
   let admin, manager, dev;
 
   beforeAll(async () => {
-    // ensure clean users & dependent rows in safe order
-    const emails = ['admin@example.com', 'manager@example.com', 'dev@example.com'];
-    for (const email of emails) {
-      const rows = await database.query('SELECT id FROM users WHERE email = ? LIMIT 1', [email]);
-      if (rows.length) {
-        const uid = rows[0].id;
-        await database.query('DELETE FROM project_members WHERE user_id = ?', [uid]);
-        await database.query('DELETE FROM projects WHERE created_by = ?', [uid]);
-        await database.query('DELETE FROM tasks WHERE created_by = ? OR assigned_to = ?', [uid, uid]);
-        await database.query('DELETE FROM notifications WHERE user_id = ?', [uid]);
-        await database.query('DELETE FROM users WHERE id = ?', [uid]);
-      }
-    }
+    await cleanupUsersByEmails(['admin@example.com', 'manager@example.com', 'dev@example.com']);
 
     // create users with roles
     admin = await registerAndLogin({
@@ -52,10 +32,7 @@ describe('Projects API', () => {
   });
 
   beforeEach(async () => {
-    // Cleanup projects and related tables between tests (respect FKs)
-    await database.query('DELETE FROM project_members');
-    await database.query('DELETE FROM tasks');
-    await database.query('DELETE FROM projects');
+    await clearProjectDomainData();
   });
 
   test('admin can create, update, and delete a project', async () => {

@@ -2,7 +2,6 @@ import { Task, Project, User, Comment } from '../models/index.js';
 import { 
   snakeToCamel, 
   camelToSnake,
-  getPaginationSQL,
   formatDateForDB,
   isOverdue 
 } from '../utils/helpers.js';

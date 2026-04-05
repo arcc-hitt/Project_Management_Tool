@@ -1,6 +1,7 @@
 // Mock environment variables for testing
 process.env.NODE_ENV = 'test';
-process.env.DB_NAME = 'project_management_tool_test';
+process.env.MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017';
+process.env.MONGODB_DB_NAME = 'project_management_tool_test';
 process.env.JWT_SECRET = 'test-secret-key';
 
 // Import jest globals explicitly for ESM environment

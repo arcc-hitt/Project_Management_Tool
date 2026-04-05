@@ -2,6 +2,15 @@
 
 Modern project management web app with task tracking, team collaboration, dashboards, and optional AI-powered helpers.
 
+## 🚀 Quick Start
+
+1. **Clone and install dependencies**
+2. **Create MySQL database** 
+3. **Run migrations and seed data** - All demo accounts use `Password123!`
+4. **Start both servers** - Backend (http://localhost:5000) + Frontend (http://localhost:5173)
+
+See detailed setup instructions below ⬇️
+
 ## Features
 
 - Role-based access control (Admin, Manager, Developer)
@@ -107,11 +116,19 @@ npm install
 # Create the database (first time only; requires MySQL in PATH)
 mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS project_management_tool;"
 
-# Run migrations and optional seeds
+# Run migrations to create tables
 cd ../backend
 npm run migrate
-npm run seed   # optional
+
+# Seed with sample data (optional but recommended for testing)
+npm run seed
 ```
+
+The seed script will populate your database with:
+- 5 demo user accounts (all using password `Password123!`)
+- 3 sample projects with tasks and user stories
+- Sample task comments and notifications
+- Project team assignments
 
 3) Start the apps
 
@@ -168,18 +185,18 @@ npm run test:e2e
 
 ## Test Accounts (seed data)
 
-After running the seed script, you can log in with these sample users. All accounts share the same password set by the seed script.
+After running the seed script, you can log in with these sample users. All accounts use the same password: `Password123!`
 
-- Admin: admin@example.com / Password123
-- Manager: john.manager@example.com / Password123
-- Developer: sarah.dev@example.com / Password123
-- Developer: mike.dev@example.com / Password123
-- Developer: jane.dev@example.com / Password123
+- Admin: admin@example.com / Password123!
+- Manager: john.manager@example.com / Password123!
+- Developer: sarah.dev@example.com / Password123!
+- Developer: mike.dev@example.com / Password123!
+- Developer: jane.dev@example.com / Password123!
 
 Notes:
 - Make sure you ran migrations and then seeds (backend: `npm run migrate` then `npm run seed`).
 - In Docker, you can seed with: `docker exec -it project-mgmt-backend npm run seed`.
-- The seed script updates any placeholder hashes to the plaintext password above.
+- All demo accounts use the same password for simplicity.
 
 ## Notable API Endpoints
 
@@ -195,7 +212,7 @@ Backend (`/backend/package.json`):
 - `npm run dev` – start API in watch mode
 - `npm start` – start API
 - `npm run migrate` – run DB migrations
-- `npm run seed` – seed sample data
+- `npm run seed` – seed sample data (uses Password123! directly)
 - `npm test` – run Jest tests
 
 Frontend (`/frontend/package.json`):
@@ -204,6 +221,13 @@ Frontend (`/frontend/package.json`):
 - `npm run preview` – preview built site
 - `npm test` – run unit tests
 - `npm run test:e2e` – Playwright E2E tests
+
+## Recent Improvements
+
+✅ **Simplified Password Setup**: All demo accounts now use `Password123!` directly in the database seed file - no more complex password update logic  
+✅ **Cleaner Seed Script**: Removed unnecessary bcrypt operations during seeding for faster setup  
+✅ **Updated Documentation**: Clear password information throughout all docs and Postman collections  
+✅ **Test Script**: Added `test-login.js` to verify account setup is working correctly
 
 ## Troubleshooting
 

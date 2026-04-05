@@ -1,4 +1,5 @@
-import database from '../config/database.js';
+﻿import database from '../config/database.js';
+import { mapDoc, normalizeId, toObjectId, withTimestampsOnCreate } from '../utils/mongo.js';
 
 class ActivityLog {
   constructor(data = {}) {
@@ -10,84 +11,59 @@ class ActivityLog {
     this.oldValues = data.oldValues;
     this.newValues = data.newValues;
     this.createdAt = data.createdAt;
+    this.userName = data.userName;
+    this.userEmail = data.userEmail;
+    this.userAvatar = data.userAvatar;
   }
 
-  // Static methods for database operations
+  static async _collection() {
+    return database.getCollection('activity_logs');
+  }
+
   static async create(activityData) {
     try {
-      const query = `
-        INSERT INTO activity_logs (user_id, action, entity_type, entity_id, old_values, new_values, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, NOW())
-      `;
-      
-      const values = [
-        activityData.userId,
-        activityData.action,
-        activityData.entityType,
-        activityData.entityId,
-        activityData.oldValues ? JSON.stringify(activityData.oldValues) : null,
-        activityData.newValues ? JSON.stringify(activityData.newValues) : null
-      ];
-
-      const result = await database.query(query, values);
-      
-      // Fetch and return the created activity log
-      return await ActivityLog.findById(result.insertId);
+      const logs = await ActivityLog._collection();
+      const payload = withTimestampsOnCreate({
+        userId: activityData.userId,
+        action: activityData.action,
+        entityType: activityData.entityType,
+        entityId: activityData.entityId,
+        oldValues: activityData.oldValues || null,
+        newValues: activityData.newValues || null,
+      });
+      const result = await logs.insertOne(payload);
+      return ActivityLog.findById(result.insertedId.toHexString());
     } catch (error) {
       throw new Error(`Error creating activity log: ${error.message}`);
     }
   }
 
+  static async _enrich(rows) {
+    if (!rows.length) return [];
+    const users = await database.getCollection('users');
+    const userIds = [...new Set(rows.map((r) => r.userId).filter(Boolean))].map((id) => toObjectId(id)).filter(Boolean);
+    const userDocs = await users.find({ _id: { $in: userIds } }).toArray();
+    const userMap = new Map(userDocs.map((u) => [normalizeId(u._id), u]));
+
+    return rows.map((row) => {
+      const mapped = mapDoc(row);
+      const user = mapped.userId ? userMap.get(mapped.userId) : null;
+      return new ActivityLog({
+        ...mapped,
+        userName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : null,
+        userEmail: user?.email || null,
+        userAvatar: user?.avatarUrl || null,
+      });
+    });
+  }
+
   static async findById(id) {
     try {
-      const query = `
-   SELECT al.*, 
-     CONCAT(u.first_name, ' ', u.last_name) as userName,
-     u.email as userEmail,
-     u.avatar_url as userAvatar
-   FROM activity_logs al
-   INNER JOIN users u ON al.user_id = u.id
-        WHERE al.id = ?
-      `;
-      
-      const rows = await database.query(query, [id]);
-      
-      if (rows.length === 0) {
-        return null;
-      }
-      
-      const data = rows[0];
-      
-      // Parse JSON fields
-      if (data.old_values) {
-        try {
-          data.oldValues = JSON.parse(data.old_values);
-        } catch (e) {
-          data.oldValues = null;
-        }
-      }
-      
-      if (data.new_values) {
-        try {
-          data.newValues = JSON.parse(data.new_values);
-        } catch (e) {
-          data.newValues = null;
-        }
-      }
-      
-      return new ActivityLog({
-        id: data.id,
-        userId: data.user_id,
-        action: data.action,
-        entityType: data.entity_type,
-        entityId: data.entity_id,
-        oldValues: data.oldValues,
-        newValues: data.newValues,
-        createdAt: data.created_at,
-        userName: data.userName,
-        userEmail: data.userEmail,
-        userAvatar: data.userAvatar
-      });
+      const logs = await ActivityLog._collection();
+      const row = await logs.findOne({ _id: toObjectId(id) });
+      if (!row) return null;
+      const [log] = await ActivityLog._enrich([row]);
+      return log;
     } catch (error) {
       throw new Error(`Error finding activity log: ${error.message}`);
     }
@@ -95,172 +71,49 @@ class ActivityLog {
 
   static async findAll(filters = {}) {
     try {
-      let query = `
-   SELECT al.*, 
-     CONCAT(u.first_name, ' ', u.last_name) as userName,
-     u.email as userEmail,
-     u.avatar_url as userAvatar
-   FROM activity_logs al
-   INNER JOIN users u ON al.user_id = u.id
-        WHERE 1=1
-      `;
-      
-      const values = [];
-      
-      // Apply filters
-      if (filters.entityType) {
-        query += ` AND al.entity_type = ?`;
-        values.push(filters.entityType);
+      const logs = await ActivityLog._collection();
+      const query = {};
+      if (filters.entityType) query.entityType = filters.entityType;
+      if (filters.entityId) query.entityId = filters.entityId;
+      if (filters.userId) query.userId = filters.userId;
+      if (filters.action) query.action = filters.action;
+      if (filters.dateFrom || filters.dateTo) {
+        query.createdAt = {};
+        if (filters.dateFrom) query.createdAt.$gte = new Date(filters.dateFrom);
+        if (filters.dateTo) query.createdAt.$lte = new Date(filters.dateTo);
       }
-      
-      if (filters.entityId) {
-        query += ` AND al.entity_id = ?`;
-        values.push(filters.entityId);
-      }
-      
-      if (filters.userId) {
-        query += ` AND al.user_id = ?`;
-        values.push(filters.userId);
-      }
-      
-      if (filters.action) {
-        query += ` AND al.action = ?`;
-        values.push(filters.action);
-      }
-      
-      if (filters.dateFrom) {
-        query += ` AND al.created_at >= ?`;
-        values.push(filters.dateFrom);
-      }
-      
-      if (filters.dateTo) {
-        query += ` AND al.created_at <= ?`;
-        values.push(filters.dateTo);
-      }
-      
-      // Add ordering
-      query += ` ORDER BY al.created_at DESC`;
-      
-      // Add pagination
-      if (filters.limit) {
-        query += ` LIMIT ?`;
-        values.push(parseInt(filters.limit));
-        
-        if (filters.offset) {
-          query += ` OFFSET ?`;
-          values.push(parseInt(filters.offset));
-        }
-      }
-      
-  const rows = await database.query(query, values);
-      
-      return rows.map(data => {
-        // Parse JSON fields
-        if (data.old_values) {
-          try {
-            data.oldValues = JSON.parse(data.old_values);
-          } catch (e) {
-            data.oldValues = null;
-          }
-        }
-        
-        if (data.new_values) {
-          try {
-            data.newValues = JSON.parse(data.new_values);
-          } catch (e) {
-            data.newValues = null;
-          }
-        }
-        
-        return new ActivityLog({
-          id: data.id,
-          userId: data.user_id,
-          action: data.action,
-          entityType: data.entity_type,
-          entityId: data.entity_id,
-          oldValues: data.oldValues,
-          newValues: data.newValues,
-          createdAt: data.created_at,
-          userName: data.userName,
-          userEmail: data.userEmail,
-          userAvatar: data.userAvatar
-        });
-      });
+
+      const limit = filters.limit ? parseInt(filters.limit, 10) : 0;
+      const offset = filters.offset ? parseInt(filters.offset, 10) : 0;
+      const rows = await logs.find(query).sort({ createdAt: -1 }).skip(offset).limit(limit || 0).toArray();
+      return ActivityLog._enrich(rows);
     } catch (error) {
       throw new Error(`Error finding activity logs: ${error.message}`);
     }
   }
 
   static async findByEntity(entityType, entityId, options = {}) {
-    try {
-      const filters = {
-        entityType,
-        entityId,
-        ...options
-      };
-      
-      return await ActivityLog.findAll(filters);
-    } catch (error) {
-      throw new Error(`Error finding activity logs by entity: ${error.message}`);
-    }
+    return ActivityLog.findAll({ entityType, entityId, ...options });
   }
 
   static async findByUser(userId, options = {}) {
-    try {
-      const filters = {
-        userId,
-        ...options
-      };
-      
-      return await ActivityLog.findAll(filters);
-    } catch (error) {
-      throw new Error(`Error finding activity logs by user: ${error.message}`);
-    }
+    return ActivityLog.findAll({ userId, ...options });
   }
 
   static async count(filters = {}) {
     try {
-      let query = `
-        SELECT COUNT(*) as total
-        FROM activity_logs al
-        WHERE 1=1
-      `;
-      
-      const values = [];
-      
-      // Apply same filters as findAll
-      if (filters.entityType) {
-        query += ` AND al.entity_type = ?`;
-        values.push(filters.entityType);
+      const logs = await ActivityLog._collection();
+      const query = {};
+      if (filters.entityType) query.entityType = filters.entityType;
+      if (filters.entityId) query.entityId = filters.entityId;
+      if (filters.userId) query.userId = filters.userId;
+      if (filters.action) query.action = filters.action;
+      if (filters.dateFrom || filters.dateTo) {
+        query.createdAt = {};
+        if (filters.dateFrom) query.createdAt.$gte = new Date(filters.dateFrom);
+        if (filters.dateTo) query.createdAt.$lte = new Date(filters.dateTo);
       }
-      
-      if (filters.entityId) {
-        query += ` AND al.entity_id = ?`;
-        values.push(filters.entityId);
-      }
-      
-      if (filters.userId) {
-        query += ` AND al.user_id = ?`;
-        values.push(filters.userId);
-      }
-      
-      if (filters.action) {
-        query += ` AND al.action = ?`;
-        values.push(filters.action);
-      }
-      
-      if (filters.dateFrom) {
-        query += ` AND al.created_at >= ?`;
-        values.push(filters.dateFrom);
-      }
-      
-      if (filters.dateTo) {
-        query += ` AND al.created_at <= ?`;
-        values.push(filters.dateTo);
-      }
-      
-  const rows = await database.query(query, values);
-      return rows[0].total;
+      return await logs.countDocuments(query);
     } catch (error) {
       throw new Error(`Error counting activity logs: ${error.message}`);
     }
@@ -268,64 +121,32 @@ class ActivityLog {
 
   static async deleteOld(daysToKeep = 90) {
     try {
-      const query = `
-        DELETE FROM activity_logs 
-        WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)
-      `;
-      
-      const [result] = await database.query(query, [daysToKeep]);
-      return result.affectedRows;
+      const logs = await ActivityLog._collection();
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - Number(daysToKeep));
+      const result = await logs.deleteMany({ createdAt: { $lt: cutoff } });
+      return result.deletedCount;
     } catch (error) {
       throw new Error(`Error deleting old activity logs: ${error.message}`);
     }
   }
 
-  // Helper methods for common activity types
   static async logProjectActivity(userId, action, projectId, oldValues = null, newValues = null) {
-    return await ActivityLog.create({
-      userId,
-      action,
-      entityType: 'project',
-      entityId: projectId,
-      oldValues,
-      newValues
-    });
+    return ActivityLog.create({ userId, action, entityType: 'project', entityId: projectId, oldValues, newValues });
   }
 
   static async logTaskActivity(userId, action, taskId, oldValues = null, newValues = null) {
-    return await ActivityLog.create({
-      userId,
-      action,
-      entityType: 'task',
-      entityId: taskId,
-      oldValues,
-      newValues
-    });
+    return ActivityLog.create({ userId, action, entityType: 'task', entityId: taskId, oldValues, newValues });
   }
 
   static async logUserActivity(userId, action, targetUserId, oldValues = null, newValues = null) {
-    return await ActivityLog.create({
-      userId,
-      action,
-      entityType: 'user',
-      entityId: targetUserId,
-      oldValues,
-      newValues
-    });
+    return ActivityLog.create({ userId, action, entityType: 'user', entityId: targetUserId, oldValues, newValues });
   }
 
   static async logCommentActivity(userId, action, commentId, oldValues = null, newValues = null) {
-    return await ActivityLog.create({
-      userId,
-      action,
-      entityType: 'comment',
-      entityId: commentId,
-      oldValues,
-      newValues
-    });
+    return ActivityLog.create({ userId, action, entityType: 'comment', entityId: commentId, oldValues, newValues });
   }
 
-  // Activity type constants
   static get ACTIONS() {
     return {
       CREATE: 'create',
@@ -341,7 +162,7 @@ class ActivityLog {
       UPLOAD: 'upload',
       DOWNLOAD: 'download',
       LOGIN: 'login',
-      LOGOUT: 'logout'
+      LOGOUT: 'logout',
     };
   }
 
@@ -352,7 +173,7 @@ class ActivityLog {
       USER: 'user',
       COMMENT: 'comment',
       FILE: 'file',
-      TIME_ENTRY: 'time_entry'
+      TIME_ENTRY: 'time_entry',
     };
   }
 }

@@ -212,7 +212,7 @@ export const getCommentsByTask = asyncHandler(async (req, res) => {
     return sendError(res, 'Validation failed', 400, errors.array());
   }
 
-  const taskId = parseInt(req.params.taskId);
+  const taskId = req.params.taskId;
   const page = parseInt(req.query.page) || 1;
   const limit = Math.min(parseInt(req.query.limit) || 20, 100);
 
@@ -283,7 +283,7 @@ export const getCommentById = asyncHandler(async (req, res) => {
     return sendError(res, 'Validation failed', 400, errors.array());
   }
 
-  const commentId = parseInt(req.params.id);
+  const commentId = req.params.id;
 
   try {
     const comment = await Comment.findById(commentId);
@@ -352,7 +352,7 @@ export const updateComment = asyncHandler(async (req, res) => {
     return sendError(res, 'Validation failed', 400, errors.array());
   }
 
-  const commentId = parseInt(req.params.id);
+  const commentId = req.params.id;
   const { comment } = req.body;
   const userId = req.user.id;
   const userRole = req.user.role;
@@ -431,7 +431,7 @@ export const deleteComment = asyncHandler(async (req, res) => {
     return sendError(res, 'Validation failed', 400, errors.array());
   }
 
-  const commentId = parseInt(req.params.id);
+  const commentId = req.params.id;
   const userId = req.user.id;
   const userRole = req.user.role;
 

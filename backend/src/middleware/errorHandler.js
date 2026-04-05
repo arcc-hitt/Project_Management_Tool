@@ -5,14 +5,14 @@ export const errorHandler = (err, req, res, next) => {
 
   console.error('Error:', err);
 
-  // MySQL duplicate entry error
-  if (err.code === 'ER_DUP_ENTRY') {
+  // MongoDB duplicate key error
+  if (err.code === 11000) {
     const message = 'Duplicate field value entered';
     error = { message, statusCode: 400 };
   }
 
-  // MySQL foreign key constraint error
-  if (err.code === 'ER_NO_REFERENCED_ROW_2') {
+  // Invalid ObjectId or cast-related errors
+  if (err.name === 'BSONError' || err.name === 'CastError') {
     const message = 'Resource not found';
     error = { message, statusCode: 404 };
   }

@@ -222,7 +222,7 @@ export const getAllUsers = asyncHandler(async (req, res) => {
  */
 export const getUserById = asyncHandler(async (req, res) => {
   try {
-    const userId = parseInt(req.params.id);
+    const userId = req.params.id;
     const user = await userService.getUserById(userId);
     
     if (!user) {
@@ -307,7 +307,7 @@ export const createUser = asyncHandler(async (req, res) => {
  */
 export const updateUser = asyncHandler(async (req, res) => {
   try {
-    const userId = parseInt(req.params.id);
+    const userId = req.params.id;
     const user = await userService.updateUser(userId, req.body, req.user.id);
     
     return sendSuccess(res, 'User updated successfully', user);
@@ -349,7 +349,7 @@ export const updateUser = asyncHandler(async (req, res) => {
  */
 export const deleteUser = asyncHandler(async (req, res) => {
   try {
-    const userId = parseInt(req.params.id);
+    const userId = req.params.id;
     await userService.deleteUser(userId, req.user.id);
     
     return sendSuccess(res, 'User deleted successfully');
@@ -393,7 +393,7 @@ export const deleteUser = asyncHandler(async (req, res) => {
  */
 export const reactivateUser = asyncHandler(async (req, res) => {
   try {
-    const userId = parseInt(req.params.id);
+    const userId = req.params.id;
     const user = await userService.reactivateUser(userId, req.user.id);
     
     return sendSuccess(res, 'User reactivated successfully', user);
@@ -443,7 +443,7 @@ export const reactivateUser = asyncHandler(async (req, res) => {
  */
 export const updateUserRole = asyncHandler(async (req, res) => {
   try {
-    const userId = parseInt(req.params.id);
+    const userId = req.params.id;
     const { role } = req.body;
     
     const user = await userService.updateUserRole(userId, role, req.user.id);

@@ -1,10 +1,9 @@
+﻿import bcrypt from 'bcryptjs';
 import database from '../config/database.js';
-import bcrypt from 'bcryptjs';
-import { formatDateForDB, snakeToCamel, camelToSnake } from '../utils/helpers.js';
+import { mapDoc, normalizeId, toObjectId, withTimestampsOnCreate, withUpdatedAt } from '../utils/mongo.js';
 
 class User {
   constructor(data = {}) {
-    // Accept both camelCase (from services) and snake_case (from database)
     this.id = data.id;
     this.firstName = data.firstName || data.first_name;
     this.lastName = data.lastName || data.last_name;
@@ -22,53 +21,53 @@ class User {
     this.updatedAt = data.updatedAt || data.updated_at;
   }
 
-  // Static methods for database operations
+  static async _collection() {
+    return database.getCollection('users');
+  }
+
+  static _fromDoc(doc) {
+    return doc ? new User(mapDoc(doc)) : null;
+  }
+
   static async create(userData) {
     try {
-      // Hash password before storing
-      let passwordHash = null;
-      if (userData.password) {
-        passwordHash = await bcrypt.hash(userData.password, 10);
-      }
+      const users = await User._collection();
+      const passwordHash = userData.password ? await bcrypt.hash(userData.password, 10) : null;
 
-      const query = `
-        INSERT INTO users (first_name, last_name, email, password_hash, role, avatar_url, phone, timezone, email_verified, is_active, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
-      `;
-      
-      const values = [
-        userData.firstName || userData.first_name,
-        userData.lastName || userData.last_name,
-        userData.email,
+      const payload = withTimestampsOnCreate({
+        firstName: userData.firstName || userData.first_name,
+        lastName: userData.lastName || userData.last_name,
+        email: userData.email,
         passwordHash,
-        userData.role || 'developer',
-        userData.avatarUrl || userData.avatar_url || null,
-        userData.phone || null,
-        userData.timezone || 'UTC',
-        userData.emailVerified || userData.email_verified || false,
-        userData.isActive !== undefined ? userData.isActive : (userData.is_active !== undefined ? userData.is_active : true)
-      ];
+        role: userData.role || 'developer',
+        avatarUrl: userData.avatarUrl || userData.avatar_url || null,
+        phone: userData.phone || null,
+        timezone: userData.timezone || 'UTC',
+        emailVerified: userData.emailVerified || userData.email_verified || false,
+        emailVerifiedAt: userData.emailVerifiedAt || userData.email_verified_at || null,
+        isActive: userData.isActive !== undefined ? userData.isActive : (userData.is_active !== undefined ? userData.is_active : true),
+      });
 
-  const result = await database.query(query, values);
-      
-      // Fetch and return the created user
-      return await User.findById(result.insertId);
+      const result = await users.insertOne(payload);
+      return await User.findById(result.insertedId.toHexString());
     } catch (error) {
       throw new Error(`Error creating user: ${error.message}`);
     }
   }
 
-  static async findById(id) {
+  static async findById(id, options = {}) {
     try {
-  const query = 'SELECT * FROM users WHERE id = ? AND is_active = TRUE';
-  const rows = await database.query(query, [id]);
-      
-      if (rows.length === 0) {
-        return null;
+      const users = await User._collection();
+      const _id = toObjectId(id);
+      if (!_id) return null;
+
+      const filter = { _id };
+      if (!options.includeInactive) {
+        filter.isActive = true;
       }
 
-      // Convert from snake_case to camelCase for the model
-      return new User(rows[0]);
+      const doc = await users.findOne(filter);
+      return User._fromDoc(doc);
     } catch (error) {
       throw new Error(`Error finding user by ID: ${error.message}`);
     }
@@ -76,14 +75,9 @@ class User {
 
   static async findByEmail(email) {
     try {
-  const query = 'SELECT * FROM users WHERE email = ? AND is_active = TRUE';
-  const rows = await database.query(query, [email]);
-      
-      if (rows.length === 0) {
-        return null;
-      }
-
-      return new User(rows[0]);
+      const users = await User._collection();
+      const doc = await users.findOne({ email, isActive: true });
+      return User._fromDoc(doc);
     } catch (error) {
       throw new Error(`Error finding user by email: ${error.message}`);
     }
@@ -91,37 +85,33 @@ class User {
 
   static async findAll(options = {}) {
     try {
-      let query = 'SELECT * FROM users WHERE is_active = TRUE';
-      const values = [];
+      const users = await User._collection();
+      const filter = { isActive: true };
 
-      // Add filtering options
       if (options.role) {
-        query += ' AND role = ?';
-        values.push(options.role);
+        filter.role = options.role;
       }
 
       if (options.search) {
-        query += ' AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ?)';
-        const searchTerm = `%${options.search}%`;
-        values.push(searchTerm, searchTerm, searchTerm);
+        const regex = new RegExp(options.search, 'i');
+        filter.$or = [
+          { firstName: regex },
+          { lastName: regex },
+          { email: regex },
+        ];
       }
 
-      // Add ordering
-      query += ' ORDER BY created_at DESC';
+      const limit = options.limit ? parseInt(options.limit, 10) : 0;
+      const offset = options.offset ? parseInt(options.offset, 10) : 0;
 
-      // Add pagination
-      if (options.limit) {
-        query += ' LIMIT ?';
-        values.push(parseInt(options.limit));
-        
-        if (options.offset) {
-          query += ' OFFSET ?';
-          values.push(parseInt(options.offset));
-        }
-      }
+      const docs = await users
+        .find(filter)
+        .sort({ createdAt: -1 })
+        .skip(offset)
+        .limit(limit || 0)
+        .toArray();
 
-  const rows = await database.query(query, values);
-      return rows.map(row => new User(row));
+      return docs.map((doc) => User._fromDoc(doc));
     } catch (error) {
       throw new Error(`Error finding users: ${error.message}`);
     }
@@ -129,22 +119,23 @@ class User {
 
   static async count(options = {}) {
     try {
-      let query = 'SELECT COUNT(*) as total FROM users WHERE is_active = TRUE';
-      const values = [];
+      const users = await User._collection();
+      const filter = { isActive: true };
 
       if (options.role) {
-        query += ' AND role = ?';
-        values.push(options.role);
+        filter.role = options.role;
       }
 
       if (options.search) {
-        query += ' AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ?)';
-        const searchTerm = `%${options.search}%`;
-        values.push(searchTerm, searchTerm, searchTerm);
+        const regex = new RegExp(options.search, 'i');
+        filter.$or = [
+          { firstName: regex },
+          { lastName: regex },
+          { email: regex },
+        ];
       }
 
-  const rows = await database.query(query, values);
-      return rows[0].total;
+      return await users.countDocuments(filter);
     } catch (error) {
       throw new Error(`Error counting users: ${error.message}`);
     }
@@ -152,35 +143,39 @@ class User {
 
   static async update(id, updateData) {
     try {
-      // Hash password if it's being updated
-      if (updateData.password) {
-        updateData.password_hash = await bcrypt.hash(updateData.password, 10);
-        delete updateData.password; // Remove plain password
+      const users = await User._collection();
+      const _id = toObjectId(id);
+      if (!_id) throw new Error('Invalid user ID');
+
+      const normalized = { ...updateData };
+      if (normalized.password) {
+        normalized.passwordHash = await bcrypt.hash(normalized.password, 10);
+        delete normalized.password;
       }
 
-      const fields = [];
-      const values = [];
+      const mapped = {};
+      const keyMap = {
+        first_name: 'firstName',
+        last_name: 'lastName',
+        password_hash: 'passwordHash',
+        avatar_url: 'avatarUrl',
+        last_login: 'lastLogin',
+        email_verified: 'emailVerified',
+        email_verified_at: 'emailVerifiedAt',
+        is_active: 'isActive',
+      };
 
-      // Build dynamic update query
-      Object.keys(updateData).forEach(key => {
-        if (updateData[key] !== undefined && key !== 'id') {
-          fields.push(`${key} = ?`);
-          values.push(updateData[key]);
-        }
-      });
+      for (const [key, value] of Object.entries(normalized)) {
+        if (value === undefined || key === 'id') continue;
+        mapped[keyMap[key] || key] = value;
+      }
 
-      if (fields.length === 0) {
+      if (Object.keys(mapped).length === 0) {
         throw new Error('No fields to update');
       }
 
-      // Add updated timestamp
-      fields.push('updated_at = NOW()');
-      values.push(id);
-
-      const query = `UPDATE users SET ${fields.join(', ')} WHERE id = ?`;
-      await database.query(query, values);
-
-      return await User.findById(id);
+      await users.updateOne({ _id }, { $set: withUpdatedAt(mapped) });
+      return await User.findById(id, { includeInactive: true });
     } catch (error) {
       throw new Error(`Error updating user: ${error.message}`);
     }
@@ -188,11 +183,12 @@ class User {
 
   static async delete(id) {
     try {
-      // Soft delete - set is_active to false
-  const query = 'UPDATE users SET is_active = FALSE, updated_at = NOW() WHERE id = ?';
-  const result = await database.query(query, [id]);
-      
-      return result.affectedRows > 0;
+      const users = await User._collection();
+      const _id = toObjectId(id);
+      if (!_id) return false;
+
+      const result = await users.updateOne({ _id }, { $set: withUpdatedAt({ isActive: false }) });
+      return result.modifiedCount > 0;
     } catch (error) {
       throw new Error(`Error deleting user: ${error.message}`);
     }
@@ -200,27 +196,27 @@ class User {
 
   static async updateLastLogin(id) {
     try {
-      const query = 'UPDATE users SET last_login = NOW(), updated_at = NOW() WHERE id = ?';
-      await database.query(query, [id]);
+      const users = await User._collection();
+      const _id = toObjectId(id);
+      if (!_id) return;
+
+      await users.updateOne({ _id }, { $set: withUpdatedAt({ lastLogin: new Date() }) });
     } catch (error) {
       throw new Error(`Error updating last login: ${error.message}`);
     }
   }
 
-  // Instance methods
   async save() {
     try {
       if (this.id) {
-        // Update existing user
         return await User.update(this.id, this.toObject());
-      } else {
-        // Create new user
-        const created = await User.create(this.toObject());
-        this.id = created.id;
-        this.created_at = created.created_at;
-        this.updated_at = created.updated_at;
-        return this;
       }
+
+      const created = await User.create(this.toObject());
+      this.id = created.id;
+      this.createdAt = created.createdAt;
+      this.updatedAt = created.updatedAt;
+      return this;
     } catch (error) {
       throw new Error(`Error saving user: ${error.message}`);
     }
@@ -236,16 +232,22 @@ class User {
 
   async getProjects() {
     try {
-      const query = `
-        SELECT p.*, pm.role as member_role, pm.joined_at
-        FROM projects p
-        INNER JOIN project_members pm ON p.id = pm.project_id
-        WHERE pm.user_id = ? AND p.status != 'cancelled'
-        ORDER BY pm.joined_at DESC
-      `;
-      
-  const rows = await database.query(query, [this.id]);
-      return rows;
+      const projectMembers = await database.getCollection('project_members');
+      const projects = await database.getCollection('projects');
+
+      const memberships = await projectMembers.find({ userId: this.id }).sort({ joinedAt: -1 }).toArray();
+      if (memberships.length === 0) return [];
+
+      const projectIds = memberships.map((m) => toObjectId(m.projectId)).filter(Boolean);
+      const docs = await projects.find({ _id: { $in: projectIds }, status: { $ne: 'cancelled' } }).toArray();
+      const byId = new Map(docs.map((doc) => [normalizeId(doc._id), mapDoc(doc)]));
+
+      return memberships
+        .map((m) => {
+          const p = byId.get(m.projectId);
+          return p ? { ...p, member_role: m.role, joined_at: m.joinedAt } : null;
+        })
+        .filter(Boolean);
     } catch (error) {
       throw new Error(`Error getting user projects: ${error.message}`);
     }
@@ -253,33 +255,27 @@ class User {
 
   async getTasks(options = {}) {
     try {
-      let query = `
-        SELECT t.*, p.name as project_name
-        FROM tasks t
-        INNER JOIN projects p ON t.project_id = p.id
-        WHERE t.assigned_to = ?
-      `;
-      const values = [this.id];
+      const tasks = await database.getCollection('tasks');
+      const projects = await database.getCollection('projects');
 
-      if (options.status) {
-        query += ' AND t.status = ?';
-        values.push(options.status);
-      }
+      const filter = { assignedTo: this.id };
+      if (options.status) filter.status = options.status;
+      if (options.project_id) filter.projectId = options.project_id;
 
-      if (options.project_id) {
-        query += ' AND t.project_id = ?';
-        values.push(options.project_id);
-      }
+      const limit = options.limit ? parseInt(options.limit, 10) : 0;
+      const docs = await tasks.find(filter).sort({ createdAt: -1 }).limit(limit || 0).toArray();
+      if (docs.length === 0) return [];
 
-      query += ' ORDER BY t.created_at DESC';
+      const projectIds = [...new Set(docs.map((d) => d.projectId).filter(Boolean))]
+        .map((id) => toObjectId(id))
+        .filter(Boolean);
+      const projectDocs = await projects.find({ _id: { $in: projectIds } }).toArray();
+      const projectMap = new Map(projectDocs.map((p) => [normalizeId(p._id), p.name]));
 
-      if (options.limit) {
-        query += ' LIMIT ?';
-        values.push(parseInt(options.limit));
-      }
-
-  const rows = await database.query(query, values);
-      return rows;
+      return docs.map((doc) => ({
+        ...mapDoc(doc),
+        project_name: projectMap.get(doc.projectId) || null,
+      }));
     } catch (error) {
       throw new Error(`Error getting user tasks: ${error.message}`);
     }
@@ -301,13 +297,12 @@ class User {
       emailVerifiedAt: this.emailVerifiedAt,
       isActive: this.isActive,
       createdAt: this.createdAt,
-      updatedAt: this.updatedAt
+      updatedAt: this.updatedAt,
     };
   }
 
   toJSON() {
     const obj = this.toObject();
-    // Remove password_hash from JSON representation
     delete obj.passwordHash;
     return obj;
   }
@@ -316,23 +311,22 @@ class User {
     return `${this.firstName} ${this.lastName}`.trim();
   }
 
-  // Email verification methods
   static async verifyEmail(userId) {
     try {
-      const query = `
-        UPDATE users 
-        SET email_verified = true, email_verified_at = NOW(), updated_at = NOW()
-        WHERE id = ?
-      `;
-      
-      await database.query(query, [userId]);
+      const users = await User._collection();
+      const _id = toObjectId(userId);
+      if (!_id) return false;
+
+      await users.updateOne(
+        { _id },
+        { $set: withUpdatedAt({ emailVerified: true, emailVerifiedAt: new Date() }) }
+      );
       return true;
     } catch (error) {
       throw new Error(`Error verifying email: ${error.message}`);
     }
   }
 
-  // Password helpers used by AuthService
   static async verifyPassword(userId, candidatePassword) {
     try {
       const user = await User.findById(userId);
@@ -345,16 +339,18 @@ class User {
 
   static async updatePassword(userId, newPassword) {
     try {
+      const users = await User._collection();
+      const _id = toObjectId(userId);
+      if (!_id) return false;
+
       const passwordHash = await bcrypt.hash(newPassword, 10);
-      const query = 'UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?';
-      await database.query(query, [passwordHash, userId]);
+      await users.updateOne({ _id }, { $set: withUpdatedAt({ passwordHash }) });
       return true;
     } catch (error) {
       throw new Error(`Error updating password: ${error.message}`);
     }
   }
 
-  // Validation methods
   static validateCreate(data) {
     const errors = [];
 

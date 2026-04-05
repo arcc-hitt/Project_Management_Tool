@@ -78,7 +78,7 @@ export const canManageUsers = (req, res, next) => {
 export const canAccessUserData = (req, res, next) => {
   try {
     const { user } = req;
-    const targetUserId = parseInt(req.params.id || req.params.userId);
+    const targetUserId = req.params.id || req.params.userId;
 
     // Admin and managers can access any user data
     if (user.role === 'admin' || user.role === 'manager') {

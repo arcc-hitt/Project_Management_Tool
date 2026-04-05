@@ -1,5 +1,7 @@
 import { body, param, query } from 'express-validator';
 
+const isValidId = (value) => /^[a-fA-F0-9]{24}$/.test(String(value)) || /^\d+$/.test(String(value));
+
 export const createProjectValidation = [
   body('name')
     .trim()
@@ -62,8 +64,8 @@ export const createProjectValidation = [
 
   body('teamMembers.*.userId')
     .if(body('teamMembers').exists())
-    .isInt({ min: 1 })
-    .withMessage('User ID must be a positive integer'),
+    .custom(isValidId)
+    .withMessage('User ID must be a valid identifier'),
 
   body('teamMembers.*.role')
     .if(body('teamMembers').exists())
@@ -74,8 +76,8 @@ export const createProjectValidation = [
 
 export const updateProjectValidation = [
   param('id')
-    .isInt({ min: 1 })
-    .withMessage('Project ID must be a positive integer'),
+    .custom(isValidId)
+    .withMessage('Project ID must be a valid identifier'),
 
   body('name')
     .optional()
@@ -124,18 +126,18 @@ export const updateProjectValidation = [
 
 export const projectIdValidation = [
   param('id')
-    .isInt({ min: 1 })
-    .withMessage('Project ID must be a positive integer')
+    .custom(isValidId)
+    .withMessage('Project ID must be a valid identifier')
 ];
 
 export const addTeamMemberValidation = [
   param('id')
-    .isInt({ min: 1 })
-    .withMessage('Project ID must be a positive integer'),
+    .custom(isValidId)
+    .withMessage('Project ID must be a valid identifier'),
 
   body('userId')
-    .isInt({ min: 1 })
-    .withMessage('User ID must be a positive integer'),
+    .custom(isValidId)
+    .withMessage('User ID must be a valid identifier'),
 
   body('role')
     .optional()
@@ -145,22 +147,22 @@ export const addTeamMemberValidation = [
 
 export const removeTeamMemberValidation = [
   param('id')
-    .isInt({ min: 1 })
-    .withMessage('Project ID must be a positive integer'),
+    .custom(isValidId)
+    .withMessage('Project ID must be a valid identifier'),
 
   param('userId')
-    .isInt({ min: 1 })
-    .withMessage('User ID must be a positive integer')
+    .custom(isValidId)
+    .withMessage('User ID must be a valid identifier')
 ];
 
 export const updateMemberRoleValidation = [
   param('id')
-    .isInt({ min: 1 })
-    .withMessage('Project ID must be a positive integer'),
+    .custom(isValidId)
+    .withMessage('Project ID must be a valid identifier'),
 
   param('userId')
-    .isInt({ min: 1 })
-    .withMessage('User ID must be a positive integer'),
+    .custom(isValidId)
+    .withMessage('User ID must be a valid identifier'),
 
   body('role')
     .isIn(['manager', 'developer', 'tester', 'designer'])

@@ -1,9 +1,8 @@
- import database from '../config/database.js';
-import { formatDateForDB, snakeToCamel, camelToSnake } from '../utils/helpers.js';
+﻿import database from '../config/database.js';
+import { mapDoc, normalizeId, toObjectId, withTimestampsOnCreate, withUpdatedAt } from '../utils/mongo.js';
 
 class Task {
   constructor(data = {}) {
-    // Accept both camelCase (from services) and snake_case (from database)
     this.id = data.id;
     this.projectId = data.projectId || data.project_id;
     this.title = data.title;
@@ -24,66 +23,86 @@ class Task {
     this.updatedAt = data.updatedAt || data.updated_at;
   }
 
-  // Static methods for database operations
+  static async _collection() {
+    return database.getCollection('tasks');
+  }
+
+  static _fromDoc(doc) {
+    return doc ? new Task(mapDoc(doc)) : null;
+  }
+
   static async create(taskData) {
     try {
-      const query = `
-        INSERT INTO tasks (project_id, title, description, status, priority, 
-                          assigned_to, created_by, estimated_hours, actual_hours, due_date, 
-                          tags, story_points, blocked, blocked_reason, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
-      `;
-      
-      const values = [
-        taskData.projectId || taskData.project_id,
-        taskData.title,
-        taskData.description || null,
-        taskData.status || 'todo',
-        taskData.priority || 'medium',
-        taskData.assignedTo || taskData.assigned_to || null,
-        taskData.createdBy || taskData.created_by,
-        taskData.estimatedHours || taskData.estimated_hours || null,
-        taskData.actualHours || taskData.actual_hours || 0,
-        taskData.dueDate ? formatDateForDB(taskData.dueDate) : (taskData.due_date ? formatDateForDB(taskData.due_date) : null),
-        taskData.tags ? JSON.stringify(taskData.tags) : null,
-        taskData.storyPoints || taskData.story_points || null,
-        taskData.blocked || false,
-        taskData.blockedReason || taskData.blocked_reason || null
-      ];
+      const tasks = await Task._collection();
+      const payload = withTimestampsOnCreate({
+        projectId: taskData.projectId || taskData.project_id,
+        title: taskData.title,
+        description: taskData.description || null,
+        status: taskData.status || 'todo',
+        priority: taskData.priority || 'medium',
+        assignedTo: taskData.assignedTo || taskData.assigned_to || null,
+        createdBy: taskData.createdBy || taskData.created_by,
+        estimatedHours: taskData.estimatedHours || taskData.estimated_hours || null,
+        actualHours: taskData.actualHours || taskData.actual_hours || 0,
+        dueDate: taskData.dueDate || taskData.due_date || null,
+        completedAt: taskData.completedAt || taskData.completed_at || null,
+        tags: taskData.tags || null,
+        storyPoints: taskData.storyPoints || taskData.story_points || null,
+        blocked: taskData.blocked || false,
+        blockedReason: taskData.blockedReason || taskData.blocked_reason || null,
+      });
 
-  const result = await database.query(query, values);
-      
-      // Fetch and return the created task
-      return await Task.findById(result.insertId);
+      const result = await tasks.insertOne(payload);
+      return await Task.findById(result.insertedId.toHexString());
     } catch (error) {
       throw new Error(`Error creating task: ${error.message}`);
     }
   }
 
+  static async _enrichDocs(docs) {
+    if (!docs.length) return [];
+
+    const projects = await database.getCollection('projects');
+    const users = await database.getCollection('users');
+
+    const projectIds = [...new Set(docs.map((d) => d.projectId).filter(Boolean))].map((id) => toObjectId(id)).filter(Boolean);
+    const userIds = [...new Set(docs.flatMap((d) => [d.assignedTo, d.createdBy]).filter(Boolean))].map((id) => toObjectId(id)).filter(Boolean);
+
+    const [projectDocs, userDocs] = await Promise.all([
+      projects.find({ _id: { $in: projectIds } }).toArray(),
+      users.find({ _id: { $in: userIds } }).toArray(),
+    ]);
+
+    const projectMap = new Map(projectDocs.map((p) => [normalizeId(p._id), p]));
+    const userMap = new Map(userDocs.map((u) => [normalizeId(u._id), u]));
+
+    const now = new Date();
+    return docs.map((doc) => {
+      const mapped = mapDoc(doc);
+      const project = mapped.projectId ? projectMap.get(mapped.projectId) : null;
+      const assignee = mapped.assignedTo ? userMap.get(mapped.assignedTo) : null;
+      const creator = mapped.createdBy ? userMap.get(mapped.createdBy) : null;
+      mapped.projectName = project?.name || null;
+      mapped.projectStatus = project?.status || null;
+      mapped.assigneeName = assignee ? `${assignee.firstName || ''} ${assignee.lastName || ''}`.trim() : null;
+      mapped.assigneeEmail = assignee?.email || null;
+      mapped.createdByName = creator ? `${creator.firstName || ''} ${creator.lastName || ''}`.trim() : null;
+      mapped.createdByEmail = creator?.email || null;
+      mapped.isOverdue = !!(mapped.dueDate && new Date(mapped.dueDate) < now && mapped.status !== 'done');
+      return new Task(mapped);
+    });
+  }
+
   static async findById(id) {
     try {
-      const query = `
-        SELECT t.*, 
-               p.name as projectName,
-               p.status as projectStatus,
-               CONCAT(assignee.first_name, ' ', assignee.last_name) as assigneeName,
-               assignee.email as assigneeEmail,
-               CONCAT(creator.first_name, ' ', creator.last_name) as createdByName,
-               creator.email as createdByEmail
-        FROM tasks t
-        LEFT JOIN projects p ON t.project_id = p.id
-        LEFT JOIN users assignee ON t.assigned_to = assignee.id
-        LEFT JOIN users creator ON t.created_by = creator.id
-        WHERE t.id = ?
-      `;
-      
-      const rows = await database.query(query, [id]);
-      
-      if (rows.length === 0) {
-        return null;
-      }
+      const tasks = await Task._collection();
+      const _id = toObjectId(id);
+      if (!_id) return null;
 
-      return new Task(rows[0]);
+      const doc = await tasks.findOne({ _id });
+      if (!doc) return null;
+      const [task] = await Task._enrichDocs([doc]);
+      return task;
     } catch (error) {
       throw new Error(`Error finding task by ID: ${error.message}`);
     }
@@ -91,123 +110,58 @@ class Task {
 
   static async findAll(options = {}) {
     try {
-      let query = `
-        SELECT t.*, 
-               p.name as projectName,
-               p.status as projectStatus,
-               CONCAT(assignee.first_name, ' ', assignee.last_name) as assigneeName,
-               assignee.email as assigneeEmail,
-               CONCAT(creator.first_name, ' ', creator.last_name) as createdByName,
-               creator.email as createdByEmail,
-               CASE 
-                 WHEN t.due_date < NOW() AND t.status NOT IN ('done') THEN TRUE
-                 ELSE FALSE
-               END as isOverdue
-        FROM tasks t
-        LEFT JOIN projects p ON t.project_id = p.id
-        LEFT JOIN users assignee ON t.assigned_to = assignee.id
-        LEFT JOIN users creator ON t.created_by = creator.id
-        WHERE 1=1
-      `;
-      
-      const values = [];
+      const tasks = await Task._collection();
+      const filter = {};
 
-      // Add filtering options
-      if (options.projectId) {
-        query += ' AND t.project_id = ?';
-        values.push(options.projectId);
-      }
-
-      if (options.status) {
-        query += ' AND t.status = ?';
-        values.push(options.status);
-      }
-
-      if (options.priority) {
-        query += ' AND t.priority = ?';
-        values.push(options.priority);
-      }
-
-      if (options.assignedTo) {
-        query += ' AND t.assigned_to = ?';
-        values.push(options.assignedTo);
-      }
-
-      if (options.createdBy) {
-        query += ' AND t.created_by = ?';
-        values.push(options.createdBy);
-      }
-
-      if (options.overdue) {
-        query += ' AND t.due_date < NOW() AND t.status NOT IN (\'done\')';
-      }
-
+      if (options.projectId) filter.projectId = options.projectId;
+      if (options.status) filter.status = options.status;
+      if (options.priority) filter.priority = options.priority;
+      if (options.assignedTo) filter.assignedTo = options.assignedTo;
+      if (options.createdBy) filter.createdBy = options.createdBy;
+      if (options.overdue) filter.dueDate = { $lt: new Date() };
       if (options.search) {
-        query += ' AND (t.title LIKE ? OR t.description LIKE ?)';
-        const searchTerm = `%${options.search}%`;
-        values.push(searchTerm, searchTerm);
+        const regex = new RegExp(options.search, 'i');
+        filter.$or = [{ title: regex }, { description: regex }];
       }
 
-      // Add ordering with sanitization
-      const allowedOrderBy = new Set(['created_at', 'updated_at', 'due_date', 'priority', 'status']);
-      const orderBy = allowedOrderBy.has(options.orderBy) ? options.orderBy : 'created_at';
-      const orderDir = (options.orderDir || 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
-      query += ` ORDER BY t.${orderBy} ${orderDir}`;
+      const orderByMap = {
+        created_at: 'createdAt',
+        updated_at: 'updatedAt',
+        due_date: 'dueDate',
+        priority: 'priority',
+        status: 'status',
+      };
+      const sortField = orderByMap[options.orderBy] || 'createdAt';
+      const sortDir = (options.orderDir || 'DESC').toUpperCase() === 'ASC' ? 1 : -1;
 
-      // Add pagination
-      if (options.limit) {
-        query += ' LIMIT ?';
-        values.push(parseInt(options.limit));
-        
-        if (options.offset) {
-          query += ' OFFSET ?';
-          values.push(parseInt(options.offset));
-        }
-      }
+      const limit = options.limit ? parseInt(options.limit, 10) : 0;
+      const offset = options.offset ? parseInt(options.offset, 10) : 0;
 
-      const rows = await database.query(query, values);
-      
-      const tasks = rows.map(row => new Task(row));
-      
-      return tasks;
+      const docs = await tasks.find(filter).sort({ [sortField]: sortDir }).skip(offset).limit(limit || 0).toArray();
+      return await Task._enrichDocs(docs);
     } catch (error) {
       throw new Error(`Error finding tasks: ${error.message}`);
     }
   }
 
   static async findByProject(projectId, options = {}) {
-    return await Task.findAll({ ...options, projectId });
+    return Task.findAll({ ...options, projectId });
   }
 
   static async findByUser(userId, options = {}) {
-    return await Task.findAll({ ...options, assignedTo: userId });
+    return Task.findAll({ ...options, assignedTo: userId });
   }
 
   static async count(options = {}) {
     try {
-      let query = 'SELECT COUNT(*) as total FROM tasks WHERE 1=1';
-      const values = [];
-
-      if (options.projectId) {
-        query += ' AND project_id = ?';
-        values.push(options.projectId);
-      }
-
-      if (options.status) {
-        query += ' AND status = ?';
-        values.push(options.status);
-      }
-
-      if (options.assignedTo) {
-        query += ' AND assigned_to = ?';
-        values.push(options.assignedTo);
-      }
-
-      if (options.overdue) {
-        query += ' AND due_date < NOW() AND status NOT IN (\'done\')';
-      }
-      const rows = await database.query(query, values);
-      return rows[0].total;
+      const tasks = await Task._collection();
+      const filter = {};
+      if (options.projectId) filter.projectId = options.projectId;
+      if (options.status) filter.status = options.status;
+      if (options.assignedTo) filter.assignedTo = options.assignedTo;
+      if (options.overdue) filter.dueDate = { $lt: new Date() };
+      if (options.overdue) filter.status = { $ne: 'done' };
+      return await tasks.countDocuments(filter);
     } catch (error) {
       throw new Error(`Error counting tasks: ${error.message}`);
     }
@@ -215,55 +169,39 @@ class Task {
 
   static async update(id, updateData) {
     try {
-      const fields = [];
-      const values = [];
+      const tasks = await Task._collection();
+      const _id = toObjectId(id);
+      if (!_id) throw new Error('Invalid task ID');
 
-      // Build dynamic update query
-      Object.keys(updateData).forEach(key => {
-        if (updateData[key] !== undefined && key !== 'id') {
-          if (key === 'dueDate' || key === 'completedAt') {
-            const column = key === 'dueDate' ? 'due_date' : 'completed_at';
-            fields.push(`${column} = ?`);
-            values.push(updateData[key] ? formatDateForDB(updateData[key]) : null);
-          } else if (key === 'tags') {
-            fields.push('tags = ?');
-            const v = updateData[key];
-            values.push(typeof v === 'string' ? v : (v != null ? JSON.stringify(v) : null));
-          } else {
-            // Map camelCase to snake_case for known fields
-            const column =
-              key === 'projectId' ? 'project_id' :
-              key === 'assignedTo' ? 'assigned_to' :
-              key === 'createdBy' ? 'created_by' :
-              key === 'estimatedHours' ? 'estimated_hours' :
-              key === 'actualHours' ? 'actual_hours' :
-              key === 'storyPoints' ? 'story_points' :
-              key === 'blockedReason' ? 'blocked_reason' :
-              key;
-            fields.push(`${column} = ?`);
-            values.push(updateData[key]);
-          }
-        }
-      });
+      const mapped = {};
+      const keyMap = {
+        project_id: 'projectId',
+        assigned_to: 'assignedTo',
+        created_by: 'createdBy',
+        estimated_hours: 'estimatedHours',
+        actual_hours: 'actualHours',
+        due_date: 'dueDate',
+        completed_at: 'completedAt',
+        story_points: 'storyPoints',
+        blocked_reason: 'blockedReason',
+      };
 
-      if (fields.length === 0) {
+      for (const [key, value] of Object.entries(updateData)) {
+        if (value === undefined || key === 'id') continue;
+        mapped[keyMap[key] || key] = value;
+      }
+
+      if (Object.keys(mapped).length === 0) {
         throw new Error('No fields to update');
       }
 
-      // Automatically set completedAt when status changes to 'done'
-      if (updateData.status === 'done' && !updateData.completedAt) {
-        fields.push('completed_at = NOW()');
-      } else if (updateData.status && updateData.status !== 'done') {
-        fields.push('completed_at = NULL');
+      if (mapped.status === 'done' && !mapped.completedAt) {
+        mapped.completedAt = new Date();
+      } else if (mapped.status && mapped.status !== 'done') {
+        mapped.completedAt = null;
       }
 
-      // Add updated timestamp
-  fields.push('updated_at = NOW()');
-      values.push(id);
-
-      const query = `UPDATE tasks SET ${fields.join(', ')} WHERE id = ?`;
-      await database.query(query, values);
-
+      await tasks.updateOne({ _id }, { $set: withUpdatedAt(mapped) });
       return await Task.findById(id);
     } catch (error) {
       throw new Error(`Error updating task: ${error.message}`);
@@ -272,99 +210,64 @@ class Task {
 
   static async delete(id) {
     try {
-  const query = 'DELETE FROM tasks WHERE id = ?';
-  const result = await database.query(query, [id]);
-      
-      return result.affectedRows > 0;
+      const tasks = await Task._collection();
+      const _id = toObjectId(id);
+      if (!_id) return false;
+
+      const result = await tasks.deleteOne({ _id });
+      return result.deletedCount > 0;
     } catch (error) {
       throw new Error(`Error deleting task: ${error.message}`);
     }
   }
 
   static async updateStatus(id, status) {
-    try {
-      const updateData = { status };
-      
-      // Set completedAt when marking as done
-      if (status === 'done') {
-        updateData.completedAt = new Date();
-      } else {
-        updateData.completedAt = null;
-      }
-
-      return await Task.update(id, updateData);
-    } catch (error) {
-      throw new Error(`Error updating task status: ${error.message}`);
+    const updateData = { status };
+    if (status === 'done') {
+      updateData.completedAt = new Date();
+    } else {
+      updateData.completedAt = null;
     }
+    return Task.update(id, updateData);
   }
 
   static async assign(id, userId) {
-    try {
-  return await Task.update(id, { assignedTo: userId });
-    } catch (error) {
-      throw new Error(`Error assigning task: ${error.message}`);
-    }
+    return Task.update(id, { assignedTo: userId });
   }
 
-  // Instance methods
   async save() {
     try {
       if (this.id) {
-        // Update existing task
         return await Task.update(this.id, this.toObject());
-      } else {
-        // Create new task
-        const created = await Task.create(this.toObject());
-        this.id = created.id;
-        this.createdAt = created.createdAt;
-        this.updatedAt = created.updatedAt;
-        return this;
       }
+
+      const created = await Task.create(this.toObject());
+      this.id = created.id;
+      this.createdAt = created.createdAt;
+      this.updatedAt = created.updatedAt;
+      return this;
     } catch (error) {
       throw new Error(`Error saving task: ${error.message}`);
     }
   }
 
   async getComments() {
-    try {
-      const query = `
-        SELECT tc.*, 
-               CONCAT(u.first_name, ' ', u.last_name) as userName,
-               u.email as userEmail,
-               u.avatar_url as userAvatar
-        FROM task_comments tc
-        INNER JOIN users u ON tc.user_id = u.id
-        WHERE tc.task_id = ?
-        ORDER BY tc.created_at ASC
-      `;
-      
-      const rows = await database.query(query, [this.id]);
-      return rows;
-    } catch (error) {
-      throw new Error(`Error getting task comments: ${error.message}`);
-    }
+    return Task.getComments(this.id);
   }
 
   async addComment(userId, comment) {
-    try {
-      const query = `
-        INSERT INTO task_comments (task_id, user_id, comment, created_at)
-        VALUES (?, ?, ?, NOW())
-      `;
-      
-      const result = await database.query(query, [this.id, userId, comment]);
-      return result.insertId;
-    } catch (error) {
-      throw new Error(`Error adding task comment: ${error.message}`);
-    }
+    const commentCollection = await database.getCollection('task_comments');
+    const result = await commentCollection.insertOne(withTimestampsOnCreate({
+      taskId: this.id,
+      userId,
+      comment,
+    }));
+    return result.insertedId.toHexString();
   }
 
   async getTimeTracking() {
     try {
-      if (!this.startDate || !this.completedAt) {
-        return null;
-      }
-
+      if (!this.startDate || !this.completedAt) return null;
       const start = new Date(this.startDate);
       const end = new Date(this.completedAt);
       const diffInHours = (end - start) / (1000 * 60 * 60);
@@ -375,7 +278,7 @@ class Task {
         actualHours: this.actualHours,
         calculatedHours: diffInHours,
         estimatedHours: this.estimatedHours,
-        variance: this.estimatedHours ? diffInHours - this.estimatedHours : null
+        variance: this.estimatedHours ? diffInHours - this.estimatedHours : null,
       };
     } catch (error) {
       throw new Error(`Error calculating time tracking: ${error.message}`);
@@ -401,85 +304,53 @@ class Task {
       blocked: this.blocked,
       blockedReason: this.blockedReason,
       createdAt: this.createdAt,
-      updatedAt: this.updatedAt
+      updatedAt: this.updatedAt,
     };
   }
 
-  // Static helpers expected by services
   static async getComments(taskId) {
-    const query = `
-      SELECT tc.*, 
-             CONCAT(u.first_name, ' ', u.last_name) as userName,
-             u.email as userEmail,
-             u.avatar_url as userAvatar
-      FROM task_comments tc
-      INNER JOIN users u ON tc.user_id = u.id
-      WHERE tc.task_id = ?
-      ORDER BY tc.created_at ASC
-    `;
-    return await database.query(query, [taskId]);
+    const comments = await database.getCollection('task_comments');
+    const users = await database.getCollection('users');
+
+    const rows = await comments.find({ taskId }).sort({ createdAt: 1 }).toArray();
+    if (!rows.length) return [];
+
+    const userIds = [...new Set(rows.map((r) => r.userId))].map((id) => toObjectId(id)).filter(Boolean);
+    const userDocs = await users.find({ _id: { $in: userIds } }).toArray();
+    const userMap = new Map(userDocs.map((u) => [normalizeId(u._id), u]));
+
+    return rows.map((row) => {
+      const user = userMap.get(row.userId);
+      return {
+        ...mapDoc(row),
+        userName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : null,
+        userEmail: user?.email || null,
+        userAvatar: user?.avatarUrl || null,
+      };
+    });
   }
 
   static async hasUserAccess(taskId, userId) {
-    const query = `
-      SELECT 1
-      FROM tasks t
-      LEFT JOIN project_members pm ON pm.project_id = t.project_id
-      WHERE t.id = ?
-        AND (t.assigned_to = ? OR t.created_by = ? OR pm.user_id = ?)
-      LIMIT 1
-    `;
-    const rows = await database.query(query, [taskId, userId, userId, userId]);
-    return rows.length > 0;
+    const task = await Task.findById(taskId);
+    if (!task) return false;
+    if (task.assignedTo === userId || task.createdBy === userId) return true;
+
+    const projectMembers = await database.getCollection('project_members');
+    const row = await projectMembers.findOne({ projectId: task.projectId, userId });
+    return !!row;
   }
 
   static async findByAssignee(userId, options = {}) {
-    return await Task.findAll({ ...options, assignedTo: userId });
+    return Task.findAll({ ...options, assignedTo: userId });
   }
 
   static async findByUserAccess(userId, projectIds = [], options = {}) {
-    let query = `
-      SELECT t.*, 
-             p.name as projectName,
-             p.status as projectStatus,
-             CONCAT(assignee.first_name, ' ', assignee.last_name) as assigneeName,
-             CONCAT(creator.first_name, ' ', creator.last_name) as createdByName
-      FROM tasks t
-      LEFT JOIN projects p ON t.project_id = p.id
-      LEFT JOIN users assignee ON t.assigned_to = assignee.id
-      LEFT JOIN users creator ON t.created_by = creator.id
-      WHERE (t.assigned_to = ? OR t.created_by = ?`;
-    const params = [userId, userId];
+    const baseTasks = await Task.findAll(options);
+    const allowed = new Set(Array.isArray(projectIds) ? projectIds : []);
 
-    if (Array.isArray(projectIds) && projectIds.length > 0) {
-      const placeholders = projectIds.map(() => '?').join(',');
-      query += ` OR t.project_id IN (${placeholders})`;
-      params.push(...projectIds);
-    }
-
-    query += ')';
-
-    // apply filters similar to findAll
-    if (options.status) { query += ' AND t.status = ?'; params.push(options.status); }
-    if (options.priority) { query += ' AND t.priority = ?'; params.push(options.priority); }
-    if (options.projectId) { query += ' AND t.project_id = ?'; params.push(options.projectId); }
-    if (options.assignedTo) { query += ' AND t.assigned_to = ?'; params.push(options.assignedTo); }
-    if (options.search) { const s = `%${options.search}%`; query += ' AND (t.title LIKE ? OR t.description LIKE ?)'; params.push(s, s); }
-    if (options.overdue) { query += " AND t.due_date < NOW() AND t.status NOT IN ('done')"; }
-
-    const allowedOrderBy = new Set(['created_at', 'updated_at', 'due_date', 'priority', 'status']);
-    const orderBy = allowedOrderBy.has(options.orderBy) ? options.orderBy : 'created_at';
-    const orderDir = (options.orderDir || 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
-    query += ` ORDER BY t.${orderBy} ${orderDir}`;
-
-    if (options.limit) {
-      query += ' LIMIT ?';
-      params.push(parseInt(options.limit));
-      if (options.offset) { query += ' OFFSET ?'; params.push(parseInt(options.offset)); }
-    }
-
-    const rows = await database.query(query, params);
-    return rows.map(row => new Task(row));
+    return baseTasks.filter(
+      (task) => task.assignedTo === userId || task.createdBy === userId || allowed.has(task.projectId)
+    );
   }
 
   toJSON() {
@@ -487,66 +358,35 @@ class Task {
   }
 
   get isOverdue() {
-    if (!this.dueDate || this.status === 'done') {
-      return false;
-    }
+    if (!this.dueDate || this.status === 'done') return false;
     return new Date(this.dueDate) < new Date();
   }
 
   get daysUntilDue() {
-    if (!this.dueDate) {
-      return null;
-    }
+    if (!this.dueDate) return null;
     const now = new Date();
     const due = new Date(this.dueDate);
-    const diffInDays = Math.ceil((due - now) / (1000 * 60 * 60 * 24));
-    return diffInDays;
+    return Math.ceil((due - now) / (1000 * 60 * 60 * 24));
   }
 
   get completionTime() {
-    if (!this.startDate || !this.completedAt) {
-      return null;
-    }
+    if (!this.startDate || !this.completedAt) return null;
     const start = new Date(this.startDate);
     const end = new Date(this.completedAt);
-    return (end - start) / (1000 * 60 * 60); // Hours
+    return (end - start) / (1000 * 60 * 60);
   }
 
-  // Validation methods
   static validateCreate(data) {
     const errors = [];
 
-    if (!data.title || data.title.trim().length === 0) {
-      errors.push('Task title is required');
-    }
-
-    if (!data.projectId) {
-      errors.push('Project ID is required');
-    }
-
-    if (!data.createdBy) {
-      errors.push('Created by user ID is required');
-    }
-
-    if (data.status && !['todo', 'in_progress', 'in_review', 'done'].includes(data.status)) {
-      errors.push('Invalid status specified');
-    }
-
-    if (data.priority && !['low', 'medium', 'high', 'critical'].includes(data.priority)) {
-      errors.push('Invalid priority specified');
-    }
-
-    if (data.estimatedHours && (isNaN(data.estimatedHours) || data.estimatedHours < 0)) {
-      errors.push('Estimated hours must be a positive number');
-    }
-
-    if (data.actualHours && (isNaN(data.actualHours) || data.actualHours < 0)) {
-      errors.push('Actual hours must be a positive number');
-    }
-
-    if (data.dueDate && isNaN(new Date(data.dueDate))) {
-      errors.push('Invalid due date format');
-    }
+    if (!data.title || data.title.trim().length === 0) errors.push('Task title is required');
+    if (!data.projectId) errors.push('Project ID is required');
+    if (!data.createdBy) errors.push('Created by user ID is required');
+    if (data.status && !['todo', 'in_progress', 'in_review', 'done'].includes(data.status)) errors.push('Invalid status specified');
+    if (data.priority && !['low', 'medium', 'high', 'critical'].includes(data.priority)) errors.push('Invalid priority specified');
+    if (data.estimatedHours && (isNaN(data.estimatedHours) || data.estimatedHours < 0)) errors.push('Estimated hours must be a positive number');
+    if (data.actualHours && (isNaN(data.actualHours) || data.actualHours < 0)) errors.push('Actual hours must be a positive number');
+    if (data.dueDate && isNaN(new Date(data.dueDate))) errors.push('Invalid due date format');
 
     return errors;
   }
@@ -554,29 +394,12 @@ class Task {
   static validateUpdate(data) {
     const errors = [];
 
-    if (data.title !== undefined && data.title.trim().length === 0) {
-      errors.push('Task title cannot be empty');
-    }
-
-    if (data.status && !['todo', 'in_progress', 'in_review', 'done'].includes(data.status)) {
-      errors.push('Invalid status specified');
-    }
-
-    if (data.priority && !['low', 'medium', 'high', 'critical'].includes(data.priority)) {
-      errors.push('Invalid priority specified');
-    }
-
-    if (data.estimatedHours !== undefined && (isNaN(data.estimatedHours) || data.estimatedHours < 0)) {
-      errors.push('Estimated hours must be a positive number');
-    }
-
-    if (data.actualHours !== undefined && (isNaN(data.actualHours) || data.actualHours < 0)) {
-      errors.push('Actual hours must be a positive number');
-    }
-
-    if (data.dueDate !== undefined && data.dueDate !== null && isNaN(new Date(data.dueDate))) {
-      errors.push('Invalid due date format');
-    }
+    if (data.title !== undefined && data.title.trim().length === 0) errors.push('Task title cannot be empty');
+    if (data.status && !['todo', 'in_progress', 'in_review', 'done'].includes(data.status)) errors.push('Invalid status specified');
+    if (data.priority && !['low', 'medium', 'high', 'critical'].includes(data.priority)) errors.push('Invalid priority specified');
+    if (data.estimatedHours !== undefined && (isNaN(data.estimatedHours) || data.estimatedHours < 0)) errors.push('Estimated hours must be a positive number');
+    if (data.actualHours !== undefined && (isNaN(data.actualHours) || data.actualHours < 0)) errors.push('Actual hours must be a positive number');
+    if (data.dueDate !== undefined && data.dueDate !== null && isNaN(new Date(data.dueDate))) errors.push('Invalid due date format');
 
     return errors;
   }

@@ -107,7 +107,7 @@ export const authorizeOwnerOrAdmin = (req, res, next) => {
     return sendError(res, 'Authentication required', 401);
   }
 
-  const userId = parseInt(req.params.userId || req.params.id);
+  const userId = req.params.userId || req.params.id;
   const isOwner = req.user.id === userId;
   const isAdminOrManager = ['admin', 'manager'].includes(req.user.role);
 

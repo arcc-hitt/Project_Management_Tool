@@ -147,8 +147,8 @@ export const getActivities = asyncHandler(async (req, res) => {
 
   const filters = {
     entityType: req.query.entityType,
-    entityId: req.query.entityId ? parseInt(req.query.entityId) : null,
-    userId: req.query.userId ? parseInt(req.query.userId) : null,
+    entityId: req.query.entityId || null,
+    userId: req.query.userId || null,
     action: req.query.action,
     dateFrom: req.query.dateFrom,
     dateTo: req.query.dateTo,
@@ -220,7 +220,7 @@ export const getActivityById = asyncHandler(async (req, res) => {
     return sendError(res, 'Validation failed', 400, errors.array());
   }
 
-  const activityId = parseInt(req.params.id);
+  const activityId = req.params.id;
 
   try {
     const activity = await ActivityLog.findById(activityId);
@@ -335,11 +335,11 @@ export const getEntityActivities = asyncHandler(async (req, res) => {
   };
 
   try {
-    const activities = await ActivityLog.findByEntity(entityType, parseInt(entityId), options);
+    const activities = await ActivityLog.findByEntity(entityType, entityId, options);
     
     const countFilters = {
       entityType,
-      entityId: parseInt(entityId),
+      entityId,
       action: req.query.action
     };
     const total = await ActivityLog.count(countFilters);
@@ -439,7 +439,7 @@ export const getUserActivities = asyncHandler(async (req, res) => {
     return sendError(res, 'Validation failed', 400, errors.array());
   }
 
-  const userId = parseInt(req.params.userId);
+  const userId = req.params.userId;
   const page = parseInt(req.query.page) || 1;
   const limit = Math.min(parseInt(req.query.limit) || 20, 100);
   const offset = (page - 1) * limit;

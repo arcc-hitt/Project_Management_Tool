@@ -13,6 +13,7 @@ import {
 import { body, param } from 'express-validator';
 
 const router = express.Router();
+const isValidId = (value) => /^[a-fA-F0-9]{24}$/.test(String(value)) || /^\d+$/.test(String(value));
 
 /**
  * @swagger
@@ -24,8 +25,8 @@ const router = express.Router();
 // Validation middleware
 const validateCommentCreate = [
   body('taskId')
-    .isInt({ min: 1 })
-    .withMessage('Task ID must be a positive integer'),
+    .custom(isValidId)
+    .withMessage('Task ID must be a valid identifier'),
   body('comment')
     .trim()
     .isLength({ min: 1, max: 2000 })
@@ -41,14 +42,14 @@ const validateCommentUpdate = [
 
 const validateCommentId = [
   param('id')
-    .isInt({ min: 1 })
-    .withMessage('Comment ID must be a positive integer')
+    .custom(isValidId)
+    .withMessage('Comment ID must be a valid identifier')
 ];
 
 const validateTaskId = [
   param('taskId')
-    .isInt({ min: 1 })
-    .withMessage('Task ID must be a positive integer')
+    .custom(isValidId)
+    .withMessage('Task ID must be a valid identifier')
 ];
 
 // All comment routes require authentication

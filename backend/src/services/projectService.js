@@ -2,7 +2,6 @@ import { Project, User } from '../models/index.js';
 import { 
   snakeToCamel, 
   camelToSnake,
-  getPaginationSQL,
   formatDateForDB 
 } from '../utils/helpers.js';
 
