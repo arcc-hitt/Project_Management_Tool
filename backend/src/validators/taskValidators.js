@@ -1,5 +1,7 @@
 import { body, param, query } from 'express-validator';
 
+const isValidId = (value) => /^[a-fA-F0-9]{24}$/.test(String(value)) || /^\d+$/.test(String(value));
+
 export const createTaskValidation = [
   body('title')
     .trim()
@@ -25,13 +27,13 @@ export const createTaskValidation = [
     .withMessage('Invalid task priority'),
 
   body('projectId')
-    .isInt({ min: 1 })
-    .withMessage('Project ID must be a positive integer'),
+    .custom(isValidId)
+    .withMessage('Project ID must be a valid identifier'),
 
   body('assignedTo')
     .optional()
-    .isInt({ min: 1 })
-    .withMessage('Assigned user ID must be a positive integer'),
+    .custom(isValidId)
+    .withMessage('Assigned user ID must be a valid identifier'),
 
   body('dueDate')
     .optional()
@@ -46,8 +48,8 @@ export const createTaskValidation = [
 
 export const updateTaskValidation = [
   param('id')
-    .isInt({ min: 1 })
-    .withMessage('Task ID must be a positive integer'),
+    .custom(isValidId)
+    .withMessage('Task ID must be a valid identifier'),
 
   body('title')
     .optional()
@@ -75,8 +77,8 @@ export const updateTaskValidation = [
 
   body('assignedTo')
     .optional()
-    .isInt({ min: 1 })
-    .withMessage('Assigned user ID must be a positive integer'),
+    .custom(isValidId)
+    .withMessage('Assigned user ID must be a valid identifier'),
 
   body('dueDate')
     .optional()
@@ -96,20 +98,20 @@ export const updateTaskValidation = [
 
 export const taskIdValidation = [
   param('id')
-    .isInt({ min: 1 })
-    .withMessage('Task ID must be a positive integer')
+    .custom(isValidId)
+    .withMessage('Task ID must be a valid identifier')
 ];
 
 export const projectIdValidation = [
   param('projectId')
-    .isInt({ min: 1 })
-    .withMessage('Project ID must be a positive integer')
+    .custom(isValidId)
+    .withMessage('Project ID must be a valid identifier')
 ];
 
 export const addCommentValidation = [
   param('id')
-    .isInt({ min: 1 })
-    .withMessage('Task ID must be a positive integer'),
+    .custom(isValidId)
+    .withMessage('Task ID must be a valid identifier'),
 
   body('content')
     .trim()
@@ -121,8 +123,8 @@ export const addCommentValidation = [
 
 export const updateCommentValidation = [
   param('commentId')
-    .isInt({ min: 1 })
-    .withMessage('Comment ID must be a positive integer'),
+    .custom(isValidId)
+    .withMessage('Comment ID must be a valid identifier'),
 
   body('content')
     .trim()
@@ -134,8 +136,8 @@ export const updateCommentValidation = [
 
 export const deleteCommentValidation = [
   param('commentId')
-    .isInt({ min: 1 })
-    .withMessage('Comment ID must be a positive integer')
+    .custom(isValidId)
+    .withMessage('Comment ID must be a valid identifier')
 ];
 
 export const getTasksQueryValidation = [
@@ -161,13 +163,13 @@ export const getTasksQueryValidation = [
 
   query('projectId')
     .optional()
-    .isInt({ min: 1 })
-    .withMessage('Project ID must be a positive integer'),
+    .custom(isValidId)
+    .withMessage('Project ID must be a valid identifier'),
 
   query('assignedTo')
     .optional()
-    .isInt({ min: 1 })
-    .withMessage('Assigned user ID must be a positive integer'),
+    .custom(isValidId)
+    .withMessage('Assigned user ID must be a valid identifier'),
 
   query('search')
     .optional()

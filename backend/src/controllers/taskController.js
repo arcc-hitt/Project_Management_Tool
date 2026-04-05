@@ -19,8 +19,8 @@ class TaskController {
         limit: parseInt(req.query.limit) || 10,
         status: req.query.status,
         priority: req.query.priority,
-        projectId: req.query.projectId ? parseInt(req.query.projectId) : null,
-        assignedTo: req.query.assignedTo ? parseInt(req.query.assignedTo) : null,
+        projectId: req.query.projectId || null,
+        assignedTo: req.query.assignedTo || null,
         search: req.query.search,
         sortBy: req.query.sortBy,
         sortOrder: req.query.sortOrder,
@@ -55,7 +55,7 @@ class TaskController {
       const { id } = req.params;
       const { user } = req;
 
-      const task = await taskService.getTaskById(parseInt(id), user.id, user.role);
+      const task = await taskService.getTaskById(id, user.id, user.role);
 
       if (!task) {
         return res.status(404).json(formatErrorResponse('Task not found'));
@@ -115,7 +115,7 @@ class TaskController {
       const { user } = req;
       const taskData = req.body;
 
-      const task = await taskService.updateTask(parseInt(id), taskData, user.id, user.role);
+      const task = await taskService.updateTask(id, taskData, user.id, user.role);
 
       res.status(200).json(formatApiResponse(task, 'Task updated successfully'));
 
@@ -147,7 +147,7 @@ class TaskController {
       const { id } = req.params;
       const { user } = req;
 
-      await taskService.deleteTask(parseInt(id), user.id, user.role);
+      await taskService.deleteTask(id, user.id, user.role);
 
       res.status(200).json(formatApiResponse(null, 'Task deleted successfully'));
 
@@ -177,7 +177,7 @@ class TaskController {
       const { content } = req.body;
       const { user } = req;
 
-      const task = await taskService.addComment(parseInt(id), content, user.id, user.role);
+      const task = await taskService.addComment(id, content, user.id, user.role);
 
       res.status(201).json(formatApiResponse(task, 'Comment added successfully'));
 
@@ -204,7 +204,7 @@ class TaskController {
       const { content } = req.body;
       const { user } = req;
 
-      const comment = await taskService.updateComment(parseInt(commentId), content, user.id, user.role);
+      const comment = await taskService.updateComment(commentId, content, user.id, user.role);
 
       res.status(200).json(formatApiResponse(comment, 'Comment updated successfully'));
 
@@ -233,7 +233,7 @@ class TaskController {
       const { commentId } = req.params;
       const { user } = req;
 
-      await taskService.deleteComment(parseInt(commentId), user.id, user.role);
+      await taskService.deleteComment(commentId, user.id, user.role);
 
       res.status(200).json(formatApiResponse(null, 'Comment deleted successfully'));
 
@@ -305,7 +305,7 @@ class TaskController {
       const { id } = req.params;
       const { user } = req;
 
-      const comments = await taskService.getTaskComments(parseInt(id), user.id, user.role);
+      const comments = await taskService.getTaskComments(id, user.id, user.role);
 
       return res.status(200).json(formatApiResponse(comments, 'Task comments retrieved successfully'));
     } catch (error) {

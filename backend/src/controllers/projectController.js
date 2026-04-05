@@ -52,7 +52,7 @@ class ProjectController {
       const { id } = req.params;
       const { user } = req;
 
-      const project = await projectService.getProjectById(parseInt(id), user.id, user.role);
+      const project = await projectService.getProjectById(id, user.id, user.role);
 
       if (!project) {
         return res.status(404).json(formatErrorResponse('Project not found'));
@@ -114,7 +114,7 @@ class ProjectController {
       const { user } = req;
       const projectData = req.body;
 
-  const project = await projectService.updateProject(parseInt(id), projectData, user.id, user.role);
+  const project = await projectService.updateProject(id, projectData, user.id, user.role);
   const payload = project && typeof project.toObject === 'function' ? { ...project.toObject(), id: project.id } : project;
   res.status(200).json(formatApiResponse(payload, 'Project updated successfully'));
 
@@ -143,7 +143,7 @@ class ProjectController {
       const { id } = req.params;
       const { user } = req;
 
-      await projectService.deleteProject(parseInt(id), user.id, user.role);
+      await projectService.deleteProject(id, user.id, user.role);
 
       res.status(200).json(formatApiResponse(null, 'Project deleted successfully'));
 
@@ -174,8 +174,8 @@ class ProjectController {
       const { user } = req;
 
       const project = await projectService.addTeamMember(
-        parseInt(id), 
-        parseInt(userId), 
+        id, 
+        userId, 
         role, 
         user.id, 
         user.role
@@ -212,8 +212,8 @@ class ProjectController {
       const { user } = req;
 
       const project = await projectService.removeTeamMember(
-        parseInt(id), 
-        parseInt(userId), 
+        id, 
+        userId, 
         user.id, 
         user.role
       );
@@ -250,8 +250,8 @@ class ProjectController {
       const { user } = req;
 
       const project = await projectService.updateMemberRole(
-        parseInt(id), 
-        parseInt(userId), 
+        id, 
+        userId, 
         role, 
         user.id, 
         user.role
@@ -304,7 +304,7 @@ class ProjectController {
       const { id } = req.params;
       const { user } = req;
 
-      const project = await projectService.getProjectById(parseInt(id), user.id, user.role);
+      const project = await projectService.getProjectById(id, user.id, user.role);
       if (!project) {
         return res.status(404).json(formatErrorResponse('Project not found'));
       }
@@ -332,7 +332,7 @@ class ProjectController {
 
       const { id } = req.params;
       const { user } = req;
-      const tasks = await projectService.getProjectTasks(parseInt(id), user.id, user.role);
+      const tasks = await projectService.getProjectTasks(id, user.id, user.role);
       return res.status(200).json(formatApiResponse(tasks, 'Project tasks retrieved successfully'));
     } catch (error) {
       console.error('Get project tasks error:', error);

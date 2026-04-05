@@ -151,15 +151,18 @@ export const getPaginationData = (totalItems, page = 1, limit = 10) => {
 };
 
 /**
- * Generate SQL for pagination
+ * Generate pagination offset values
  * @param {number} page - Current page number
  * @param {number} limit - Items per page
- * @returns {object} SQL LIMIT and OFFSET values
+ * @returns {object} limit and offset values
  */
-export const getPaginationSQL = (page = 1, limit = 10) => {
+export const getPagination = (page = 1, limit = 10) => {
   const offset = (page - 1) * limit;
   return { limit, offset };
 };
+
+// Backward-compatible alias for older imports.
+export const getPaginationSQL = getPagination;
 
 /**
  * Validate and sanitize pagination parameters

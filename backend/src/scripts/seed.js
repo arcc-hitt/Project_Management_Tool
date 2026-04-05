@@ -1,135 +1,94 @@
+﻿import bcrypt from 'bcryptjs';
 import database from '../config/database.js';
-import { config } from '../config/config.js';
-import { fileURLToPath } from 'url';
-import path from 'path';
+import { normalizeId } from '../utils/mongo.js';
 
-// Execute seed files
 const runSeeds = async () => {
   try {
-  console.log('Seeding database with sample data...');
-  console.log(`Target database: ${config.database.name}`);
-    
-    // Connect to database
-    await database.connect();
-    
-    // Read and execute the seed SQL file
-  const fs = await import('fs');
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = path.dirname(__filename);
-    
-    const seedPath = path.join(__dirname, '../../database/seeds/sample_data.sql');
-    if (!fs.existsSync(seedPath)) {
-  console.log('No seed file found (database/seeds/sample_data.sql). Skipping seeding.');
+    console.log('Seeding MongoDB with sample data...');
+    const db = await database.connect();
+
+    const usersCol = db.collection('users');
+    const projectsCol = db.collection('projects');
+    const membersCol = db.collection('project_members');
+    const tasksCol = db.collection('tasks');
+    const commentsCol = db.collection('task_comments');
+    const notificationsCol = db.collection('notifications');
+
+    const userCount = await usersCol.countDocuments();
+    if (userCount > 0) {
+      console.log('Users collection is not empty, skipping seed insertion.');
       return;
     }
-  let seedSQL = fs.readFileSync(seedPath, 'utf8');
 
-  // Remove any USE statements to avoid overriding configured DB
-  seedSQL = seedSQL.replace(/\bUSE\s+[^;]+;/gi, '');
+    const now = new Date();
+    const passwordHash = await bcrypt.hash('password123', 10);
 
-    // Helper: strip comments (line and block) for robust splitting
-    const stripSqlComments = (sql) => {
-      // Remove block comments /* ... */
-      let s = sql.replace(/\/\*[\s\S]*?\*\//g, '');
-      // Remove line comments starting with -- or #
-      s = s.replace(/^\s*--.*$/gm, '');
-      s = s.replace(/^\s*#.*$/gm, '');
-      return s;
-    };
+    const users = [
+      { firstName: 'Admin', lastName: 'User', email: 'admin@example.com', role: 'admin', isActive: true, passwordHash, timezone: 'UTC', emailVerified: true, createdAt: now, updatedAt: now },
+      { firstName: 'Sarah', lastName: 'Manager', email: 'manager@example.com', role: 'manager', isActive: true, passwordHash, timezone: 'UTC', emailVerified: true, createdAt: now, updatedAt: now },
+      { firstName: 'John', lastName: 'Developer', email: 'dev1@example.com', role: 'developer', isActive: true, passwordHash, timezone: 'UTC', emailVerified: true, createdAt: now, updatedAt: now },
+      { firstName: 'Emma', lastName: 'Developer', email: 'dev2@example.com', role: 'developer', isActive: true, passwordHash, timezone: 'UTC', emailVerified: true, createdAt: now, updatedAt: now },
+    ];
 
-    seedSQL = stripSqlComments(seedSQL);
-    
-    // Split SQL file into individual statements
-    const statements = seedSQL
-      .split(';')
-      .map(statement => statement.trim())
-      .filter(statement => statement.length > 0);
-    
-    // Execute each statement
-    // Temporarily disable foreign key checks to avoid ordering issues
-    await database.query('SET FOREIGN_KEY_CHECKS=0');
-    for (const statement of statements) {
-      if (statement.trim()) {
-        try {
-          await database.query(statement);
-          console.log('Executed seed statement');
-        } catch (error) {
-          // Ignore duplicate entry errors for idempotent seeding
-          if (!error.message.includes('Duplicate entry')) {
-            console.error('Seed error:', error.message);
-            throw error;
-          } else {
-            console.log('Skipping duplicate entry');
-          }
-        }
-      }
-    }
-    await database.query('SET FOREIGN_KEY_CHECKS=1');
+    const userResult = await usersCol.insertMany(users);
+    const insertedUsers = Object.values(userResult.insertedIds).map((id) => id.toHexString());
 
-    console.log('Sample data has been inserted successfully');
+    const projects = [
+      { name: 'E-commerce Platform', description: 'A modern e-commerce website with cart and payment functionality', status: 'active', priority: 'high', startDate: now, endDate: new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000), createdBy: insertedUsers[1], createdAt: now, updatedAt: now },
+      { name: 'Mobile App Development', description: 'iOS and Android app for e-commerce platform', status: 'planning', priority: 'medium', startDate: now, endDate: new Date(now.getTime() + 120 * 24 * 60 * 60 * 1000), createdBy: insertedUsers[1], createdAt: now, updatedAt: now },
+      { name: 'Data Analytics Dashboard', description: 'Business intelligence dashboard for sales analytics', status: 'active', priority: 'medium', startDate: now, endDate: new Date(now.getTime() + 75 * 24 * 60 * 60 * 1000), createdBy: insertedUsers[0], createdAt: now, updatedAt: now },
+    ];
 
-    // Summary counts
-    try {
-      const [[usersCount]] = await Promise.all([
-        database.query('SELECT COUNT(*) AS c FROM users'),
-      ]);
-      const [[projectsCount]] = await Promise.all([
-        database.query('SELECT COUNT(*) AS c FROM projects'),
-      ]);
-      const [[tasksCount]] = await Promise.all([
-        database.query('SELECT COUNT(*) AS c FROM tasks'),
-      ]);
-      const [[commentsCount]] = await Promise.all([
-        database.query('SELECT COUNT(*) AS c FROM task_comments'),
-      ]);
-      const [[storiesCount]] = await Promise.all([
-        database.query('SELECT COUNT(*) AS c FROM user_stories'),
-      ]);
-      const [[notifsCount]] = await Promise.all([
-        database.query('SELECT COUNT(*) AS c FROM notifications'),
-      ]);
-      console.log('Seed summary:', {
-        users: usersCount?.c,
-        projects: projectsCount?.c,
-        tasks: tasksCount?.c,
-        comments: commentsCount?.c,
-        user_stories: storiesCount?.c,
-        notifications: notifsCount?.c,
-      });
-    } catch (sumErr) {
-      console.warn('Could not compute seed summary counts:', sumErr.message);
-    }
+    const projectResult = await projectsCol.insertMany(projects);
+    const insertedProjects = Object.values(projectResult.insertedIds).map((id) => id.toHexString());
+
+    const members = [
+      { projectId: insertedProjects[0], userId: insertedUsers[1], role: 'manager', joinedAt: now },
+      { projectId: insertedProjects[0], userId: insertedUsers[2], role: 'developer', joinedAt: now },
+      { projectId: insertedProjects[0], userId: insertedUsers[3], role: 'developer', joinedAt: now },
+      { projectId: insertedProjects[1], userId: insertedUsers[1], role: 'manager', joinedAt: now },
+      { projectId: insertedProjects[2], userId: insertedUsers[0], role: 'manager', joinedAt: now },
+      { projectId: insertedProjects[2], userId: insertedUsers[2], role: 'developer', joinedAt: now },
+    ];
+    await membersCol.insertMany(members);
+
+    const tasks = [
+      { projectId: insertedProjects[0], title: 'Design product catalog UI', description: 'Create responsive product listing and detail pages', status: 'in_progress', priority: 'high', assignedTo: insertedUsers[2], createdBy: insertedUsers[1], dueDate: new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000), estimatedHours: 24, actualHours: 8, createdAt: now, updatedAt: now },
+      { projectId: insertedProjects[0], title: 'Implement shopping cart', description: 'Add cart update and checkout flow', status: 'todo', priority: 'medium', assignedTo: insertedUsers[3], createdBy: insertedUsers[1], dueDate: new Date(now.getTime() + 20 * 24 * 60 * 60 * 1000), estimatedHours: 20, actualHours: 0, createdAt: now, updatedAt: now },
+      { projectId: insertedProjects[2], title: 'Build KPI dashboard widgets', description: 'Revenue and retention widgets', status: 'in_progress', priority: 'high', assignedTo: insertedUsers[2], createdBy: insertedUsers[0], dueDate: new Date(now.getTime() + 10 * 24 * 60 * 60 * 1000), estimatedHours: 16, actualHours: 4, createdAt: now, updatedAt: now },
+    ];
+
+    const taskResult = await tasksCol.insertMany(tasks);
+    const insertedTasks = Object.values(taskResult.insertedIds).map((id) => id.toHexString());
+
+    await commentsCol.insertMany([
+      { taskId: insertedTasks[0], userId: insertedUsers[1], comment: 'Great progress, keep iterating on spacing.', createdAt: now, updatedAt: now },
+      { taskId: insertedTasks[0], userId: insertedUsers[2], comment: 'Will push a revised prototype by EOD.', createdAt: now, updatedAt: now },
+    ]);
+
+    await notificationsCol.insertMany([
+      { userId: insertedUsers[2], type: 'task_assigned', title: 'New Task Assigned', message: 'You have been assigned a task.', entityType: 'task', entityId: insertedTasks[0], isRead: false, createdAt: now, updatedAt: now },
+      { userId: insertedUsers[3], type: 'task_assigned', title: 'New Task Assigned', message: 'You have been assigned a task.', entityType: 'task', entityId: insertedTasks[1], isRead: false, createdAt: now, updatedAt: now },
+    ]);
 
     console.log('Database seeding completed successfully');
-    
   } catch (error) {
-  console.error('Seeding failed:', error.message);
+    console.error('Seeding failed:', error.message);
     throw error;
   } finally {
     await database.close();
   }
 };
 
-// Run seeds if this file is executed directly (robust cross-platform check)
-const __seedFilename = fileURLToPath(import.meta.url);
-const isDirectRun = (() => {
-  try {
-    const invoked = process.argv[1] ? path.resolve(process.argv[1]) : '';
-    const current = path.resolve(__seedFilename);
-    return invoked && invoked === current;
-  } catch {
-    return false;
-  }
-})();
-
+const isDirectRun = process.argv[1] && process.argv[1].endsWith('seed.js');
 if (isDirectRun) {
   runSeeds()
     .then(() => {
-  console.log('Seeding completed');
+      console.log('Seeding completed');
       process.exit(0);
     })
     .catch((error) => {
-  console.error('Seeding failed:', error);
+      console.error('Seeding failed:', error);
       process.exit(1);
     });
 }

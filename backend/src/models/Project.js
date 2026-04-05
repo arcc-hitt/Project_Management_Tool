@@ -1,9 +1,8 @@
-import database from '../config/database.js';
-import { formatDateForDB, snakeToCamel, camelToSnake } from '../utils/helpers.js';
+﻿import database from '../config/database.js';
+import { mapDoc, normalizeId, toObjectId, withTimestampsOnCreate, withUpdatedAt } from '../utils/mongo.js';
 
 class Project {
   constructor(data = {}) {
-    // Accept both camelCase (from services) and snake_case (from database)
     this.id = data.id;
     this.name = data.name;
     this.description = data.description;
@@ -13,8 +12,7 @@ class Project {
     this.endDate = data.endDate || data.end_date;
     this.budget = data.budget;
     this.actualCost = data.actualCost || data.actual_cost;
-  // Use a private backing field to avoid clashing with getter below
-  this._progressPercentage = data.progressPercentage ?? data.progress_percentage ?? 0;
+    this._progressPercentage = data.progressPercentage ?? data.progress_percentage ?? 0;
     this.repositoryUrl = data.repositoryUrl || data.repository_url;
     this.tags = data.tags;
     this.createdBy = data.createdBy || data.created_by;
@@ -22,34 +20,34 @@ class Project {
     this.updatedAt = data.updatedAt || data.updated_at;
   }
 
-  // Static methods for database operations
+  static async _collection() {
+    return database.getCollection('projects');
+  }
+
+  static _fromDoc(doc) {
+    return doc ? new Project(mapDoc(doc)) : null;
+  }
+
   static async create(projectData) {
     try {
-      const query = `
-        INSERT INTO projects (name, description, status, priority, start_date, end_date, 
-                             budget, actual_cost, progress_percentage, repository_url, tags, created_by, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
-      `;
-      
-      const values = [
-        projectData.name,
-        projectData.description || null,
-        projectData.status || 'planning',
-        projectData.priority || 'medium',
-        projectData.startDate ? formatDateForDB(projectData.startDate) : (projectData.start_date ? formatDateForDB(projectData.start_date) : null),
-        projectData.endDate ? formatDateForDB(projectData.endDate) : (projectData.end_date ? formatDateForDB(projectData.end_date) : null),
-        projectData.budget || null,
-        projectData.actualCost || projectData.actual_cost || null,
-        projectData.progressPercentage || projectData.progress_percentage || 0,
-        projectData.repositoryUrl || projectData.repository_url || null,
-        projectData.tags ? JSON.stringify(projectData.tags) : null,
-        projectData.createdBy || projectData.created_by
-      ];
+      const projects = await Project._collection();
+      const payload = withTimestampsOnCreate({
+        name: projectData.name,
+        description: projectData.description || null,
+        status: projectData.status || 'planning',
+        priority: projectData.priority || 'medium',
+        startDate: projectData.startDate || projectData.start_date || null,
+        endDate: projectData.endDate || projectData.end_date || null,
+        budget: projectData.budget || null,
+        actualCost: projectData.actualCost || projectData.actual_cost || null,
+        progressPercentage: projectData.progressPercentage || projectData.progress_percentage || 0,
+        repositoryUrl: projectData.repositoryUrl || projectData.repository_url || null,
+        tags: projectData.tags || null,
+        createdBy: projectData.createdBy || projectData.created_by,
+      });
 
-  const result = await database.query(query, values);
-      
-      // Fetch and return the created project
-      return await Project.findById(result.insertId);
+      const result = await projects.insertOne(payload);
+      return await Project.findById(result.insertedId.toHexString());
     } catch (error) {
       throw new Error(`Error creating project: ${error.message}`);
     }
@@ -57,22 +55,19 @@ class Project {
 
   static async findById(id) {
     try {
-      const query = `
-        SELECT p.*, 
-     CONCAT(u.first_name, ' ', u.last_name) as created_by_name,
-     u.email as created_by_email
-   FROM projects p
-   LEFT JOIN users u ON p.created_by = u.id
-        WHERE p.id = ?
-      `;
-      
-  const rows = await database.query(query, [id]);
-      
-      if (rows.length === 0) {
-        return null;
-      }
+      const projects = await Project._collection();
+      const users = await database.getCollection('users');
+      const _id = toObjectId(id);
+      if (!_id) return null;
 
-      return new Project(rows[0]);
+      const doc = await projects.findOne({ _id });
+      if (!doc) return null;
+
+      const creator = doc.createdBy ? await users.findOne({ _id: toObjectId(doc.createdBy) }) : null;
+      const mapped = mapDoc(doc);
+      mapped.created_by_name = creator ? `${creator.firstName || ''} ${creator.lastName || ''}`.trim() : null;
+      mapped.created_by_email = creator?.email || null;
+      return new Project(mapped);
     } catch (error) {
       throw new Error(`Error finding project by ID: ${error.message}`);
     }
@@ -80,63 +75,59 @@ class Project {
 
   static async findAll(options = {}) {
     try {
-      let query = `
-        SELECT p.*, 
-               CONCAT(u.first_name, ' ', u.last_name) as created_by_name,
-               u.email as created_by_email,
-               COUNT(DISTINCT pm.user_id) as member_count,
-               COUNT(DISTINCT t.id) as total_tasks,
-               COUNT(DISTINCT CASE WHEN t.status = 'done' THEN t.id END) as completed_tasks
-        FROM projects p
-        LEFT JOIN users u ON p.created_by = u.id
-        LEFT JOIN project_members pm ON p.id = pm.project_id
-        LEFT JOIN tasks t ON p.id = t.project_id
-        WHERE 1=1
-      `;
-      
-      const values = [];
+      const projects = await Project._collection();
+      const users = await database.getCollection('users');
+      const projectMembers = await database.getCollection('project_members');
+      const tasks = await database.getCollection('tasks');
 
-      // Add filtering options
-      if (options.status) {
-        query += ' AND p.status = ?';
-        values.push(options.status);
-      }
-
-      if (options.priority) {
-        query += ' AND p.priority = ?';
-        values.push(options.priority);
-      }
-
-      if (options.created_by) {
-        query += ' AND p.created_by = ?';
-        values.push(options.created_by);
-      }
-
+      const filter = {};
+      if (options.status) filter.status = options.status;
+      if (options.priority) filter.priority = options.priority;
+      if (options.created_by) filter.createdBy = options.created_by;
       if (options.search) {
-        query += ' AND (p.name LIKE ? OR p.description LIKE ?)';
-        const searchTerm = `%${options.search}%`;
-        values.push(searchTerm, searchTerm);
+        const regex = new RegExp(options.search, 'i');
+        filter.$or = [{ name: regex }, { description: regex }];
       }
 
-      // Group by project
-  query += ' GROUP BY p.id, u.first_name, u.last_name, u.email';
+      const limit = options.limit ? parseInt(options.limit, 10) : 0;
+      const offset = options.offset ? parseInt(options.offset, 10) : 0;
 
-      // Add ordering
-      query += ' ORDER BY p.created_at DESC';
+      const docs = await projects.find(filter).sort({ createdAt: -1 }).skip(offset).limit(limit || 0).toArray();
 
-      // Add pagination
-      if (options.limit) {
-        query += ' LIMIT ?';
-        values.push(parseInt(options.limit));
-        
-        if (options.offset) {
-          query += ' OFFSET ?';
-          values.push(parseInt(options.offset));
+      const projectIds = docs.map((d) => normalizeId(d._id));
+      const creatorIds = [...new Set(docs.map((d) => d.createdBy).filter(Boolean))].map((id) => toObjectId(id)).filter(Boolean);
+
+      const [creatorDocs, memberRows, taskRows] = await Promise.all([
+        users.find({ _id: { $in: creatorIds } }).toArray(),
+        projectMembers.find({ projectId: { $in: projectIds } }).toArray(),
+        tasks.find({ projectId: { $in: projectIds } }).toArray(),
+      ]);
+
+      const creatorMap = new Map(creatorDocs.map((u) => [normalizeId(u._id), u]));
+      const memberCountMap = new Map();
+      const totalTaskMap = new Map();
+      const completedTaskMap = new Map();
+
+      for (const row of memberRows) {
+        memberCountMap.set(row.projectId, (memberCountMap.get(row.projectId) || 0) + 1);
+      }
+      for (const row of taskRows) {
+        totalTaskMap.set(row.projectId, (totalTaskMap.get(row.projectId) || 0) + 1);
+        if (row.status === 'done') {
+          completedTaskMap.set(row.projectId, (completedTaskMap.get(row.projectId) || 0) + 1);
         }
       }
 
-  const rows = await database.query(query, values);
-      return rows.map(row => new Project(row));
+      return docs.map((doc) => {
+        const mapped = mapDoc(doc);
+        const creator = mapped.createdBy ? creatorMap.get(mapped.createdBy) : null;
+        mapped.created_by_name = creator ? `${creator.firstName || ''} ${creator.lastName || ''}`.trim() : null;
+        mapped.created_by_email = creator?.email || null;
+        mapped.member_count = memberCountMap.get(mapped.id) || 0;
+        mapped.total_tasks = totalTaskMap.get(mapped.id) || 0;
+        mapped.completed_tasks = completedTaskMap.get(mapped.id) || 0;
+        return new Project(mapped);
+      });
     } catch (error) {
       throw new Error(`Error finding projects: ${error.message}`);
     }
@@ -144,32 +135,22 @@ class Project {
 
   static async findByUser(userId, options = {}) {
     try {
-      let query = `
-        SELECT p.*, 
-     pm.role as member_role,
-     pm.joined_at,
-     CONCAT(u.first_name, ' ', u.last_name) as created_by_name,
-               COUNT(DISTINCT t.id) as total_tasks,
-               COUNT(DISTINCT CASE WHEN t.status = 'done' THEN t.id END) as completed_tasks
-        FROM projects p
-   INNER JOIN project_members pm ON p.id = pm.project_id
-   LEFT JOIN users u ON p.created_by = u.id
-   LEFT JOIN tasks t ON p.id = t.project_id
-        WHERE pm.user_id = ?
-      `;
-      
-      const values = [userId];
+      const projectMembers = await database.getCollection('project_members');
+      const rows = await projectMembers.find({ userId }).sort({ joinedAt: -1 }).toArray();
+      const projectIds = rows.map((r) => toObjectId(r.projectId)).filter(Boolean);
+      if (projectIds.length === 0) return [];
 
-      if (options.status) {
-        query += ' AND p.status = ?';
-        values.push(options.status);
-      }
+      const projects = await Project.findAll({ ...options });
+      const roleMap = new Map(rows.map((r) => [r.projectId, r.role]));
+      const joinedMap = new Map(rows.map((r) => [r.projectId, r.joinedAt]));
 
-      query += ' GROUP BY p.id, pm.role, pm.joined_at, u.first_name, u.last_name';
-      query += ' ORDER BY pm.joined_at DESC';
-
-  const rows = await database.query(query, values);
-      return rows.map(row => new Project(row));
+      return projects
+        .filter((p) => roleMap.has(p.id))
+        .map((p) => {
+          p.member_role = roleMap.get(p.id);
+          p.joined_at = joinedMap.get(p.id);
+          return p;
+        });
     } catch (error) {
       throw new Error(`Error finding projects by user: ${error.message}`);
     }
@@ -177,21 +158,11 @@ class Project {
 
   static async count(options = {}) {
     try {
-      let query = 'SELECT COUNT(*) as total FROM projects WHERE 1=1';
-      const values = [];
-
-      if (options.status) {
-        query += ' AND status = ?';
-        values.push(options.status);
-      }
-
-      if (options.created_by) {
-        query += ' AND created_by = ?';
-        values.push(options.created_by);
-      }
-
-  const rows = await database.query(query, values);
-      return rows[0].total;
+      const projects = await Project._collection();
+      const filter = {};
+      if (options.status) filter.status = options.status;
+      if (options.created_by) filter.createdBy = options.created_by;
+      return await projects.countDocuments(filter);
     } catch (error) {
       throw new Error(`Error counting projects: ${error.message}`);
     }
@@ -199,46 +170,29 @@ class Project {
 
   static async update(id, updateData) {
     try {
-      const fields = [];
-      const values = [];
+      const projects = await Project._collection();
+      const _id = toObjectId(id);
+      if (!_id) throw new Error('Invalid project ID');
 
-      // Build dynamic update query mapping camelCase -> snake_case
-      Object.keys(updateData).forEach(key => {
-        if (updateData[key] !== undefined && key !== 'id') {
-          // Map known fields explicitly to avoid [object Object] errors
-          const column =
-            key === 'startDate' ? 'start_date' :
-            key === 'endDate' ? 'end_date' :
-            key === 'actualCost' ? 'actual_cost' :
-            key === 'progressPercentage' ? 'progress_percentage' :
-            key === 'repositoryUrl' ? 'repository_url' :
-            key;
-          if (column === 'start_date' || column === 'end_date') {
-            fields.push(`${column} = ?`);
-            values.push(updateData[key] ? formatDateForDB(updateData[key]) : null);
-          } else if (column === 'tags') {
-            // Ensure tags is stored as JSON
-            const v = updateData[key];
-            fields.push(`${column} = ?`);
-            values.push(typeof v === 'string' ? v : (v != null ? JSON.stringify(v) : null));
-          } else {
-            fields.push(`${column} = ?`);
-            values.push(updateData[key]);
-          }
-        }
-      });
+      const mapped = {};
+      const keyMap = {
+        start_date: 'startDate',
+        end_date: 'endDate',
+        actual_cost: 'actualCost',
+        progress_percentage: 'progressPercentage',
+        repository_url: 'repositoryUrl',
+      };
 
-      if (fields.length === 0) {
+      for (const [key, value] of Object.entries(updateData)) {
+        if (value === undefined || key === 'id') continue;
+        mapped[keyMap[key] || key] = value;
+      }
+
+      if (Object.keys(mapped).length === 0) {
         throw new Error('No fields to update');
       }
 
-      // Add updated timestamp
-      fields.push('updated_at = NOW()');
-      values.push(id);
-
-      const query = `UPDATE projects SET ${fields.join(', ')} WHERE id = ?`;
-      await database.query(query, values);
-
+      await projects.updateOne({ _id }, { $set: withUpdatedAt(mapped) });
       return await Project.findById(id);
     } catch (error) {
       throw new Error(`Error updating project: ${error.message}`);
@@ -247,81 +201,54 @@ class Project {
 
   static async delete(id) {
     try {
-      // Hard delete to align with schema (no is_active column)
-      const query = 'DELETE FROM projects WHERE id = ?';
-      const result = await database.query(query, [id]);
-      
-      return result.affectedRows > 0;
+      const projects = await Project._collection();
+      const _id = toObjectId(id);
+      if (!_id) return false;
+
+      const result = await projects.deleteOne({ _id });
+      return result.deletedCount > 0;
     } catch (error) {
       throw new Error(`Error deleting project: ${error.message}`);
     }
   }
 
-  // Instance methods
   async save() {
     try {
       if (this.id) {
-        // Update existing project
         return await Project.update(this.id, this.toObject());
-      } else {
-        // Create new project
-        const created = await Project.create({ ...this.toObject(), createdBy: this.createdBy });
-        this.id = created.id;
-        this.createdAt = created.createdAt;
-        this.updatedAt = created.updatedAt;
-        return this;
       }
+      const created = await Project.create({ ...this.toObject(), createdBy: this.createdBy });
+      this.id = created.id;
+      this.createdAt = created.createdAt;
+      this.updatedAt = created.updatedAt;
+      return this;
     } catch (error) {
       throw new Error(`Error saving project: ${error.message}`);
     }
   }
 
   async getMembers() {
-    try {
-      return await Project.getMembers(this.id);
-    } catch (error) {
-      throw new Error(`Error getting project members: ${error.message}`);
-    }
+    return Project.getMembers(this.id);
   }
 
   async addMember(userId, role = 'developer') {
-    try {
-      return await Project.addMember(this.id, userId, role);
-    } catch (error) {
-      throw new Error(`Error adding project member: ${error.message}`);
-    }
+    return Project.addMember(this.id, userId, role);
   }
 
   async removeMember(userId) {
-    try {
-      return await Project.removeMember(this.id, userId);
-    } catch (error) {
-      throw new Error(`Error removing project member: ${error.message}`);
-    }
+    return Project.removeMember(this.id, userId);
   }
 
   async updateMemberRole(userId, role) {
-    try {
-      return await Project.updateMemberRole(this.id, userId, role);
-    } catch (error) {
-      throw new Error(`Error updating member role: ${error.message}`);
-    }
+    return Project.updateMemberRole(this.id, userId, role);
   }
 
   async getTasks(options = {}) {
-    try {
-      return await Project.getTasks(this.id, options);
-    } catch (error) {
-      throw new Error(`Error getting project tasks: ${error.message}`);
-    }
+    return Project.getTasks(this.id, options);
   }
 
   async getStatistics() {
-    try {
-      return await Project.getStatistics(this.id);
-    } catch (error) {
-      throw new Error(`Error getting project statistics: ${error.message}`);
-    }
+    return Project.getStatistics(this.id);
   }
 
   toObject() {
@@ -340,7 +267,7 @@ class Project {
       tags: this.tags,
       createdBy: this.createdBy,
       createdAt: this.createdAt,
-      updatedAt: this.updatedAt
+      updatedAt: this.updatedAt,
     };
   }
 
@@ -349,9 +276,8 @@ class Project {
   }
 
   get progressPercentage() {
-    // If aggregated counts are present, compute dynamic percentage; otherwise use stored value
     if (this.totalTasks !== undefined && this.completedTasks !== undefined) {
-      if (!this.totalTasks || this.totalTasks === 0) return 0;
+      if (!this.totalTasks) return 0;
       return Math.round((this.completedTasks / this.totalTasks) * 100);
     }
     return this._progressPercentage ?? 0;
@@ -362,119 +288,127 @@ class Project {
   }
 
   get isOverdue() {
-    if (!this.endDate) {
-      return false;
-    }
+    if (!this.endDate) return false;
     return new Date(this.endDate) < new Date() && this.status !== 'completed';
   }
 
-  // Static helpers used by services
   static async isMember(projectId, userId) {
-    const query = 'SELECT 1 FROM project_members WHERE project_id = ? AND user_id = ? LIMIT 1';
-    const rows = await database.query(query, [projectId, userId]);
-    return rows.length > 0;
+    const projectMembers = await database.getCollection('project_members');
+    const row = await projectMembers.findOne({ projectId, userId });
+    return !!row;
   }
 
   static async getMembers(projectId) {
-    const query = `
-      SELECT 
-        u.id, u.first_name, u.last_name, u.email, u.avatar_url, u.role AS user_role,
-        pm.role AS project_role, pm.joined_at
-      FROM project_members pm
-      INNER JOIN users u ON pm.user_id = u.id
-      WHERE pm.project_id = ? AND u.is_active = TRUE
-      ORDER BY pm.joined_at ASC
-    `;
-    return await database.query(query, [projectId]);
+    const projectMembers = await database.getCollection('project_members');
+    const users = await database.getCollection('users');
+
+    const rows = await projectMembers.find({ projectId }).sort({ joinedAt: 1 }).toArray();
+    if (rows.length === 0) return [];
+
+    const userIds = rows.map((r) => toObjectId(r.userId)).filter(Boolean);
+    const userDocs = await users.find({ _id: { $in: userIds }, isActive: true }).toArray();
+    const userMap = new Map(userDocs.map((u) => [normalizeId(u._id), u]));
+
+    return rows
+      .map((r) => {
+        const user = userMap.get(r.userId);
+        if (!user) return null;
+        return {
+          id: normalizeId(user._id),
+          first_name: user.firstName,
+          last_name: user.lastName,
+          email: user.email,
+          avatar_url: user.avatarUrl,
+          user_role: user.role,
+          project_role: r.role,
+          joined_at: r.joinedAt,
+        };
+      })
+      .filter(Boolean);
   }
 
   static async addMember(projectId, userId, role = 'developer') {
-    const query = `
-      INSERT INTO project_members (project_id, user_id, role, joined_at)
-      VALUES (?, ?, ?, NOW())
-      ON DUPLICATE KEY UPDATE role = VALUES(role)
-    `;
-    await database.query(query, [projectId, userId, role]);
+    const projectMembers = await database.getCollection('project_members');
+    await projectMembers.updateOne(
+      { projectId, userId },
+      { $set: withUpdatedAt({ role }), $setOnInsert: { joinedAt: new Date() } },
+      { upsert: true }
+    );
     return true;
   }
 
   static async removeMember(projectId, userId) {
-    const query = 'DELETE FROM project_members WHERE project_id = ? AND user_id = ?';
-    const result = await database.query(query, [projectId, userId]);
-    return result.affectedRows > 0;
+    const projectMembers = await database.getCollection('project_members');
+    const result = await projectMembers.deleteOne({ projectId, userId });
+    return result.deletedCount > 0;
   }
 
   static async updateMemberRole(projectId, userId, role) {
-    const query = 'UPDATE project_members SET role = ? WHERE project_id = ? AND user_id = ?';
-    const result = await database.query(query, [role, projectId, userId]);
-    return result.affectedRows > 0;
+    const projectMembers = await database.getCollection('project_members');
+    const result = await projectMembers.updateOne({ projectId, userId }, { $set: withUpdatedAt({ role }) });
+    return result.modifiedCount > 0;
   }
 
   static async getTasks(projectId, options = {}) {
-    let query = `
-      SELECT t.*,
-             CONCAT(assignee.first_name, ' ', assignee.last_name) AS assignee_name,
-             CONCAT(creator.first_name, ' ', creator.last_name) AS created_by_name
-      FROM tasks t
-      LEFT JOIN users assignee ON t.assigned_to = assignee.id
-      LEFT JOIN users creator ON t.created_by = creator.id
-      WHERE t.project_id = ?
-    `;
-    const values = [projectId];
+    const tasks = await database.getCollection('tasks');
+    const users = await database.getCollection('users');
 
-    if (options.status) {
-      query += ' AND t.status = ?';
-      values.push(options.status);
-    }
+    const filter = { projectId };
+    if (options.status) filter.status = options.status;
+    if (options.assignedTo) filter.assignedTo = options.assignedTo;
 
-    if (options.assignedTo) {
-      query += ' AND t.assigned_to = ?';
-      values.push(options.assignedTo);
-    }
+    const limit = options.limit ? parseInt(options.limit, 10) : 0;
+    const docs = await tasks.find(filter).sort({ createdAt: -1 }).limit(limit || 0).toArray();
+    if (docs.length === 0) return [];
 
-    query += ' ORDER BY t.created_at DESC';
+    const userIds = [...new Set(docs.flatMap((d) => [d.assignedTo, d.createdBy]).filter(Boolean))]
+      .map((id) => toObjectId(id))
+      .filter(Boolean);
+    const userDocs = await users.find({ _id: { $in: userIds } }).toArray();
+    const userMap = new Map(userDocs.map((u) => [normalizeId(u._id), u]));
 
-    if (options.limit) {
-      query += ' LIMIT ?';
-      values.push(parseInt(options.limit));
-    }
-
-    return await database.query(query, values);
+    return docs.map((doc) => {
+      const assignee = doc.assignedTo ? userMap.get(doc.assignedTo) : null;
+      const creator = doc.createdBy ? userMap.get(doc.createdBy) : null;
+      return {
+        ...mapDoc(doc),
+        assignee_name: assignee ? `${assignee.firstName || ''} ${assignee.lastName || ''}`.trim() : null,
+        created_by_name: creator ? `${creator.firstName || ''} ${creator.lastName || ''}`.trim() : null,
+      };
+    });
   }
 
   static async getStatistics(projectId) {
-    const query = `
-      SELECT 
-        COUNT(DISTINCT pm.user_id) AS memberCount,
-        COUNT(DISTINCT t.id) AS totalTasks,
-        COUNT(DISTINCT CASE WHEN t.status = 'done' THEN t.id END) AS completedTasks,
-        COUNT(DISTINCT CASE WHEN t.status = 'in_progress' THEN t.id END) AS activeTasks,
-        COUNT(DISTINCT CASE WHEN t.due_date < NOW() AND t.status NOT IN ('done') THEN t.id END) AS overdueTasks,
-        SUM(t.actual_hours) AS totalHoursSpent,
-        NULL AS avgCompletionHours
-      FROM projects p
-      LEFT JOIN project_members pm ON p.id = pm.project_id
-      LEFT JOIN tasks t ON p.id = t.project_id
-      WHERE p.id = ?
-    `;
-    const rows = await database.query(query, [projectId]);
-    return rows[0] || {
-      memberCount: 0,
-      totalTasks: 0,
-      completedTasks: 0,
-      activeTasks: 0,
-      overdueTasks: 0,
-      totalHoursSpent: 0,
-      avgCompletionHours: null
+    const projectMembers = await database.getCollection('project_members');
+    const tasks = await database.getCollection('tasks');
+
+    const [members, taskRows] = await Promise.all([
+      projectMembers.countDocuments({ projectId }),
+      tasks.find({ projectId }).toArray(),
+    ]);
+
+    const now = new Date();
+    const totalTasks = taskRows.length;
+    const completedTasks = taskRows.filter((t) => t.status === 'done').length;
+    const activeTasks = taskRows.filter((t) => t.status === 'in_progress').length;
+    const overdueTasks = taskRows.filter((t) => t.dueDate && new Date(t.dueDate) < now && t.status !== 'done').length;
+    const totalHoursSpent = taskRows.reduce((sum, t) => sum + Number(t.actualHours || 0), 0);
+
+    return {
+      memberCount: members,
+      totalTasks,
+      completedTasks,
+      activeTasks,
+      overdueTasks,
+      totalHoursSpent,
+      avgCompletionHours: null,
     };
   }
 
   static async findByMemberId(userId, options = {}) {
-    // Alias to findByUser for service compatibility
-    return await Project.findByUser(userId, options);
+    return Project.findByUser(userId, options);
   }
 
-  // Validation methods
   static validateCreate(data) {
     const errors = [];
 
@@ -525,10 +459,8 @@ class Project {
     }
 
     if ((data.startDate || data.endDate)) {
-      // If updating dates, validate them
       const start = data.startDate ? new Date(data.startDate) : null;
       const end = data.endDate ? new Date(data.endDate) : null;
-      
       if (start && end && end <= start) {
         errors.push('End date must be after start date');
       }

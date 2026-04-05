@@ -1,9 +1,8 @@
-import database from '../config/database.js';
-import { snakeToCamel, camelToSnake } from '../utils/helpers.js';
+﻿import database from '../config/database.js';
+import { mapDoc, normalizeId, toObjectId, withTimestampsOnCreate, withUpdatedAt } from '../utils/mongo.js';
 
 class ProjectMember {
   constructor(data = {}) {
-    // Accept both camelCase (from services) and snake_case (from database)
     this.id = data.id;
     this.projectId = data.projectId || data.project_id;
     this.userId = data.userId || data.user_id;
@@ -11,24 +10,20 @@ class ProjectMember {
     this.joinedAt = data.joinedAt || data.joined_at;
   }
 
-  // Static methods for database operations
+  static async _collection() {
+    return database.getCollection('project_members');
+  }
+
   static async findAll(where = {}) {
     try {
-      let query = 'SELECT * FROM project_members';
-      const params = [];
-      
-      if (Object.keys(where).length > 0) {
-        const conditions = Object.keys(where).map(key => {
-          // map camelCase keys to snake_case columns
-          const column = key === 'projectId' ? 'project_id' : key === 'userId' ? 'user_id' : key;
-          params.push(where[key]);
-          return `${column} = ?`;
-        });
-        query += ` WHERE ${conditions.join(' AND ')}`;
+      const col = await ProjectMember._collection();
+      const filter = {};
+      for (const [k, v] of Object.entries(where)) {
+        const key = k === 'project_id' ? 'projectId' : k === 'user_id' ? 'userId' : k;
+        filter[key] = v;
       }
-      
-      const rows = await database.query(query, params);
-      return rows.map(row => new ProjectMember(row));
+      const rows = await col.find(filter).toArray();
+      return rows.map((row) => new ProjectMember(mapDoc(row)));
     } catch (error) {
       throw new Error(`Failed to fetch project members: ${error.message}`);
     }
@@ -49,15 +44,12 @@ class ProjectMember {
 
   static async create(data) {
     try {
-      const query = `
-        INSERT INTO project_members (project_id, user_id, role, joined_at)
-        VALUES (?, ?, ?, NOW())
-      `;
-      const params = [data.projectId, data.userId, data.role || 'developer'];
-      
-      await database.query(query, params);
-      
-      // Get the created record
+      const col = await ProjectMember._collection();
+      await col.updateOne(
+        { projectId: data.projectId, userId: data.userId },
+        { $set: withUpdatedAt({ role: data.role || 'developer' }), $setOnInsert: { joinedAt: new Date() } },
+        { upsert: true }
+      );
       return this.findOne({ projectId: data.projectId, userId: data.userId });
     } catch (error) {
       throw new Error(`Failed to create project member: ${error.message}`);
@@ -67,15 +59,9 @@ class ProjectMember {
   async save() {
     try {
       if (this.id) {
-        // Update existing record
-        const query = `
-          UPDATE project_members 
-          SET role = ?
-          WHERE id = ?
-        `;
-        await database.query(query, [this.role, this.id]);
+        const col = await ProjectMember._collection();
+        await col.updateOne({ _id: toObjectId(this.id) }, { $set: withUpdatedAt({ role: this.role }) });
       } else {
-        // Create new record
         const created = await ProjectMember.create(this);
         Object.assign(this, created);
       }
@@ -87,19 +73,13 @@ class ProjectMember {
 
   static async delete(where) {
     try {
-      let query = 'DELETE FROM project_members';
-      const params = [];
-      
-      if (Object.keys(where).length > 0) {
-        const conditions = Object.keys(where).map(key => {
-          const column = key === 'projectId' ? 'project_id' : key === 'userId' ? 'user_id' : key;
-          params.push(where[key]);
-          return `${column} = ?`;
-        });
-        query += ` WHERE ${conditions.join(' AND ')}`;
+      const col = await ProjectMember._collection();
+      const filter = {};
+      for (const [k, v] of Object.entries(where || {})) {
+        const key = k === 'project_id' ? 'projectId' : k === 'user_id' ? 'userId' : k;
+        filter[key] = v;
       }
-      
-      await database.query(query, params);
+      await col.deleteMany(filter);
     } catch (error) {
       throw new Error(`Failed to delete project member: ${error.message}`);
     }

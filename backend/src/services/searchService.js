@@ -1,197 +1,181 @@
-import database from '../config/database.js';
-import { snakeToCamel } from '../utils/helpers.js';
+﻿import database from '../config/database.js';
+import { mapDoc, normalizeId, toObjectId } from '../utils/mongo.js';
 
 class SearchService {
-  /**
-   * Unified search across multiple entities
-   */
   async unifiedSearch(options = {}) {
     const { query = '', page = 1, limit = 20, userId } = options;
-    
-    try {
-      if (!query || query.trim().length === 0) {
-        return {
-          projects: [],
-          tasks: [],
-          users: [],
-          comments: [],
-          pagination: {
-            totalItems: 0,
-            totalPages: 0,
-            currentPage: page,
-            itemsPerPage: limit
-          }
-        };
-      }
 
-      // Search projects
-      const projects = await this.searchProjects({ query, userId, limit: 5 });
-      
-      // Search tasks  
-      const tasks = await this.searchTasks({ query, userId, limit: 5 });
-      
-      // Search users
-      const users = await this.searchUsers({ query, limit: 5 });
-      
-      // Search comments
-      const comments = await this.searchComments({ query, userId, limit: 5 });
-
-      const totalItems = projects.length + tasks.length + users.length + comments.length;
-
+    if (!query || query.trim().length === 0) {
       return {
-        projects,
-        tasks,
-        users,
-        comments,
+        projects: [],
+        tasks: [],
+        users: [],
+        comments: [],
         pagination: {
-          totalItems,
-          totalPages: Math.ceil(totalItems / limit),
+          totalItems: 0,
+          totalPages: 0,
           currentPage: page,
-          itemsPerPage: limit
-        }
+          itemsPerPage: limit,
+        },
       };
-      
-    } catch (error) {
-      throw error;
     }
+
+    const [projects, tasks, users, comments] = await Promise.all([
+      this.searchProjects({ query, userId, limit: 5 }),
+      this.searchTasks({ query, userId, limit: 5 }),
+      this.searchUsers({ query, limit: 5 }),
+      this.searchComments({ query, userId, limit: 5 }),
+    ]);
+
+    const totalItems = projects.length + tasks.length + users.length + comments.length;
+    return {
+      projects,
+      tasks,
+      users,
+      comments,
+      pagination: {
+        totalItems,
+        totalPages: Math.ceil(totalItems / limit),
+        currentPage: page,
+        itemsPerPage: limit,
+      },
+    };
   }
 
-  /**
-   * Search projects
-   */
   async searchProjects(options = {}) {
     const { query = '', userId, limit = 10 } = options;
-    
-    try {
-      let sqlQuery = `
-        SELECT p.*, CONCAT(u.first_name, ' ', u.last_name) as created_by_name
-        FROM projects p
-        LEFT JOIN users u ON p.created_by = u.id
-        WHERE (p.name LIKE ? OR p.description LIKE ?)
-      `;
-      
-      const queryParams = [`%${query}%`, `%${query}%`];
-      
-      if (userId) {
-        sqlQuery += ` AND (p.created_by = ? OR EXISTS (
-          SELECT 1 FROM project_members pm 
-          WHERE pm.project_id = p.id AND pm.user_id = ?
-        ))`;
-        queryParams.push(userId, userId);
-      }
-      
-      sqlQuery += ` ORDER BY p.created_at DESC LIMIT ?`;
-      queryParams.push(limit);
-      
-  const rows = await database.query(sqlQuery, queryParams);
-  return rows.map(row => snakeToCamel(row));
-      
-    } catch (error) {
-      throw error;
+    const projects = await database.getCollection('projects');
+    const users = await database.getCollection('users');
+    const members = await database.getCollection('project_members');
+
+    const regex = new RegExp(query, 'i');
+    const filter = { $or: [{ name: regex }, { description: regex }] };
+
+    let rows = await projects.find(filter).sort({ createdAt: -1 }).limit(Number(limit) * 3).toArray();
+    if (userId) {
+      const memberships = await members.find({ userId }).project({ projectId: 1 }).toArray();
+      const memberIds = new Set(memberships.map((m) => m.projectId));
+      rows = rows.filter((p) => p.createdBy === userId || memberIds.has(normalizeId(p._id)));
     }
+    rows = rows.slice(0, Number(limit));
+    const creatorIds = [...new Set(rows.map((r) => r.createdBy).filter(Boolean))].map((id) => toObjectId(id)).filter(Boolean);
+    const creatorDocs = await users.find({ _id: { $in: creatorIds } }).toArray();
+    const creatorMap = new Map(creatorDocs.map((u) => [normalizeId(u._id), u]));
+
+    return rows.map((row) => {
+      const mapped = mapDoc(row);
+      const creator = mapped.createdBy ? creatorMap.get(mapped.createdBy) : null;
+      mapped.createdByName = creator ? `${creator.firstName || ''} ${creator.lastName || ''}`.trim() : null;
+      return mapped;
+    });
   }
 
-  /**
-   * Search tasks
-   */
   async searchTasks(options = {}) {
     const { query = '', userId, limit = 10 } = options;
-    
-    try {
-      let sqlQuery = `
-        SELECT t.*, p.name as project_name,
-               CONCAT(u_assigned.first_name, ' ', u_assigned.last_name) as assigned_to_name,
-               CONCAT(u_created.first_name, ' ', u_created.last_name) as created_by_name
-        FROM tasks t
-        LEFT JOIN projects p ON t.project_id = p.id
-        LEFT JOIN users u_assigned ON t.assigned_to = u_assigned.id
-        LEFT JOIN users u_created ON t.created_by = u_created.id
-        WHERE (t.title LIKE ? OR t.description LIKE ?)
-      `;
-      
-      const queryParams = [`%${query}%`, `%${query}%`];
-      
-      if (userId) {
-        sqlQuery += ` AND (t.assigned_to = ? OR t.created_by = ? OR EXISTS (
-          SELECT 1 FROM project_members pm 
-          WHERE pm.project_id = t.project_id AND pm.user_id = ?
-        ))`;
-        queryParams.push(userId, userId, userId);
-      }
-      
-      sqlQuery += ` ORDER BY t.created_at DESC LIMIT ?`;
-      queryParams.push(limit);
-      
-  const rows = await database.query(sqlQuery, queryParams);
-  return rows.map(row => snakeToCamel(row));
-      
-    } catch (error) {
-      throw error;
+    const tasks = await database.getCollection('tasks');
+    const projects = await database.getCollection('projects');
+    const users = await database.getCollection('users');
+    const members = await database.getCollection('project_members');
+
+    const regex = new RegExp(query, 'i');
+    const filter = { $or: [{ title: regex }, { description: regex }] };
+
+    if (userId) {
+      const memberships = await members.find({ userId }).project({ projectId: 1 }).toArray();
+      const memberIds = memberships.map((m) => m.projectId);
+      filter.$and = [{
+        $or: [
+          { assignedTo: userId },
+          { createdBy: userId },
+          { projectId: { $in: memberIds } },
+        ],
+      }];
     }
+
+    const rows = await tasks.find(filter).sort({ createdAt: -1 }).limit(Number(limit)).toArray();
+
+    const projectIds = [...new Set(rows.map((r) => r.projectId).filter(Boolean))].map((id) => toObjectId(id)).filter(Boolean);
+    const userIds = [...new Set(rows.flatMap((r) => [r.assignedTo, r.createdBy]).filter(Boolean))].map((id) => toObjectId(id)).filter(Boolean);
+
+    const [projectDocs, userDocs] = await Promise.all([
+      projects.find({ _id: { $in: projectIds } }).toArray(),
+      users.find({ _id: { $in: userIds } }).toArray(),
+    ]);
+
+    const projectMap = new Map(projectDocs.map((p) => [normalizeId(p._id), p]));
+    const userMap = new Map(userDocs.map((u) => [normalizeId(u._id), u]));
+
+    return rows.map((row) => {
+      const mapped = mapDoc(row);
+      const project = mapped.projectId ? projectMap.get(mapped.projectId) : null;
+      const assignee = mapped.assignedTo ? userMap.get(mapped.assignedTo) : null;
+      const creator = mapped.createdBy ? userMap.get(mapped.createdBy) : null;
+      mapped.projectName = project?.name || null;
+      mapped.assignedToName = assignee ? `${assignee.firstName || ''} ${assignee.lastName || ''}`.trim() : null;
+      mapped.createdByName = creator ? `${creator.firstName || ''} ${creator.lastName || ''}`.trim() : null;
+      return mapped;
+    });
   }
 
-  /**
-   * Search users
-   */
   async searchUsers(options = {}) {
     const { query = '', limit = 10 } = options;
-    
-    try {
-      const sqlQuery = `
-        SELECT id, first_name, last_name, email, role, avatar_url, created_at
-        FROM users 
-        WHERE is_active = TRUE 
-        AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ?)
-        ORDER BY created_at DESC 
-        LIMIT ?
-      `;
-      
-      const queryParams = [`%${query}%`, `%${query}%`, `%${query}%`, limit];
-      
-  const rows = await database.query(sqlQuery, queryParams);
-  return rows.map(row => snakeToCamel(row));
-      
-    } catch (error) {
-      throw error;
-    }
+    const users = await database.getCollection('users');
+
+    const regex = new RegExp(query, 'i');
+    const rows = await users
+      .find({ isActive: true, $or: [{ firstName: regex }, { lastName: regex }, { email: regex }] })
+      .project({ passwordHash: 0 })
+      .sort({ createdAt: -1 })
+      .limit(Number(limit))
+      .toArray();
+
+    return rows.map((row) => mapDoc(row));
   }
 
-  /**
-   * Search comments
-   */
   async searchComments(options = {}) {
     const { query = '', userId, limit = 10 } = options;
-    
-    try {
-      let sqlQuery = `
-        SELECT c.*, t.title as task_title, p.name as project_name,
-               CONCAT(u.first_name, ' ', u.last_name) as user_name
-        FROM task_comments c
-        LEFT JOIN tasks t ON c.task_id = t.id
-        LEFT JOIN projects p ON t.project_id = p.id
-        LEFT JOIN users u ON c.user_id = u.id
-        WHERE c.comment LIKE ?
-      `;
-      
-      const queryParams = [`%${query}%`];
-      
-      if (userId) {
-        sqlQuery += ` AND EXISTS (
-          SELECT 1 FROM project_members pm 
-          WHERE pm.project_id = t.project_id AND pm.user_id = ?
-        )`;
-        queryParams.push(userId);
-      }
-      
-      sqlQuery += ` ORDER BY c.created_at DESC LIMIT ?`;
-      queryParams.push(limit);
-      
-  const rows = await database.query(sqlQuery, queryParams);
-  return rows.map(row => snakeToCamel(row));
-      
-    } catch (error) {
-      throw error;
+    const comments = await database.getCollection('task_comments');
+    const tasks = await database.getCollection('tasks');
+    const projects = await database.getCollection('projects');
+    const users = await database.getCollection('users');
+    const members = await database.getCollection('project_members');
+
+    const regex = new RegExp(query, 'i');
+    const filter = { comment: regex };
+
+    if (userId) {
+      const memberships = await members.find({ userId }).project({ projectId: 1 }).toArray();
+      const memberIds = new Set(memberships.map((m) => m.projectId));
+      const taskRows = await tasks.find({ projectId: { $in: [...memberIds] } }).project({ _id: 1 }).toArray();
+      filter.taskId = { $in: taskRows.map((t) => normalizeId(t._id)) };
     }
+
+    const rows = await comments.find(filter).sort({ createdAt: -1 }).limit(Number(limit)).toArray();
+    const taskIds = [...new Set(rows.map((r) => r.taskId).filter(Boolean))].map((id) => toObjectId(id)).filter(Boolean);
+    const userIds = [...new Set(rows.map((r) => r.userId).filter(Boolean))].map((id) => toObjectId(id)).filter(Boolean);
+
+    const [taskDocs, userDocs] = await Promise.all([
+      tasks.find({ _id: { $in: taskIds } }).toArray(),
+      users.find({ _id: { $in: userIds } }).toArray(),
+    ]);
+
+    const projectIds = [...new Set(taskDocs.map((t) => t.projectId).filter(Boolean))].map((id) => toObjectId(id)).filter(Boolean);
+    const projectDocs = await projects.find({ _id: { $in: projectIds } }).toArray();
+
+    const taskMap = new Map(taskDocs.map((t) => [normalizeId(t._id), t]));
+    const userMap = new Map(userDocs.map((u) => [normalizeId(u._id), u]));
+    const projectMap = new Map(projectDocs.map((p) => [normalizeId(p._id), p]));
+
+    return rows.map((row) => {
+      const mapped = mapDoc(row);
+      const task = mapped.taskId ? taskMap.get(mapped.taskId) : null;
+      const project = task?.projectId ? projectMap.get(task.projectId) : null;
+      const user = mapped.userId ? userMap.get(mapped.userId) : null;
+      mapped.taskTitle = task?.title || null;
+      mapped.projectName = project?.name || null;
+      mapped.userName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : null;
+      return mapped;
+    });
   }
 }
 

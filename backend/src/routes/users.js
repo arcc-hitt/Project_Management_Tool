@@ -89,7 +89,7 @@ router.put('/:id', authorizeOwnerOrAdmin, validateUserUpdate, updateUser);
 
 // Delete user (admin only, or users can delete themselves)
 router.delete('/:id', (req, res, next) => {
-  const userId = parseInt(req.params.id);
+  const userId = req.params.id;
   const isOwner = req.user.id === userId;
   const isAdmin = req.user.role === 'admin';
   

@@ -1,76 +1,57 @@
-import mysql from 'mysql2/promise';
+import { MongoClient } from 'mongodb';
 import { config } from './config.js';
 
 class Database {
   constructor() {
-    this.pool = null;
+    this.client = null;
+    this.db = null;
   }
 
   async connect() {
     try {
-      this.pool = mysql.createPool({
-        host: config.database.host,
-        port: config.database.port,
-        user: config.database.user,
-        password: config.database.password,
-        database: config.database.name,
-        waitForConnections: true,
-        connectionLimit: 10,
-        queueLimit: 0,
-        charset: 'utf8mb4',
+      if (this.db) {
+        return this.db;
+      }
+
+      this.client = new MongoClient(config.database.uri, {
+        maxPoolSize: 50,
+        minPoolSize: 5,
+        maxIdleTimeMS: 300000,
+        connectTimeoutMS: 10000,
+        serverSelectionTimeoutMS: 10000,
       });
 
-      // Test the connection
-      const connection = await this.pool.getConnection();
+      await this.client.connect();
+      this.db = this.client.db(config.database.name);
+
+      await this.db.command({ ping: 1 });
       console.log('Database connected successfully');
-      connection.release();
-      
-      return this.pool;
+
+      return this.db;
     } catch (error) {
       console.error('Database connection failed:', error.message);
       throw error;
     }
   }
 
-  async query(sql, params = []) {
-    try {
-      if (!this.pool) {
-        await this.connect();
-      }
-      // Use text protocol to support DDL/administrative statements during migrations
-      const [rows] = await this.pool.query(sql, params);
-      return rows;
-    } catch (error) {
-      console.error('Database query error:', error.message);
-      throw error;
-    }
-  }
-
-  async transaction(callback) {
-    if (!this.pool) {
+  async getDb() {
+    if (!this.db) {
       await this.connect();
     }
-    const connection = await this.pool.getConnection();
-    await connection.beginTransaction();
-    
-    try {
-      const result = await callback(connection);
-      await connection.commit();
-      return result;
-    } catch (error) {
-      await connection.rollback();
-      throw error;
-    } finally {
-      connection.release();
-    }
+    return this.db;
+  }
+
+  async getCollection(name) {
+    const db = await this.getDb();
+    return db.collection(name);
   }
 
   async close() {
-    if (this.pool) {
-      await this.pool.end();
-      // Reset the pool so future queries can reconnect lazily
-      this.pool = null;
-  console.log('Database connection closed');
+    if (this.client) {
+      await this.client.close();
+      this.client = null;
+      this.db = null;
+      console.log('Database connection closed');
     }
   }
 }

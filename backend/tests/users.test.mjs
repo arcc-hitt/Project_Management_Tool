@@ -1,18 +1,10 @@
 import { describe, test, expect, beforeAll, beforeEach } from '@jest/globals';
 import request from 'supertest';
 import app from '../src/server.js';
-import database from '../src/config/database.js';
+import { cleanupUserByEmail, deleteUsersByEmailRegex } from './dbTestUtils.mjs';
 
 async function registerAndLogin(user) {
-  const existing = await database.query('SELECT id FROM users WHERE email = ? LIMIT 1', [user.email]);
-  if (existing.length) {
-    const uid = existing[0].id;
-    await database.query('DELETE FROM project_members WHERE user_id = ?', [uid]);
-    await database.query('DELETE FROM projects WHERE created_by = ?', [uid]);
-    await database.query('DELETE FROM tasks WHERE created_by = ? OR assigned_to = ?', [uid, uid]);
-    await database.query('DELETE FROM notifications WHERE user_id = ?', [uid]);
-    await database.query('DELETE FROM users WHERE id = ?', [uid]);
-  }
+  await cleanupUserByEmail(user.email);
   const reg = await request(app).post('/api/auth/register').send(user).expect(201);
   const token = reg.body.data.token;
   const me = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${token}`).expect(200);
@@ -23,25 +15,15 @@ describe('Users API', () => {
   let admin;
 
   beforeAll(async () => {
-    // ensure clean admin
     const email = 'admin-users@example.com';
-    const rows = await database.query('SELECT id FROM users WHERE email = ? LIMIT 1', [email]);
-    if (rows.length) {
-      const uid = rows[0].id;
-      await database.query('DELETE FROM project_members WHERE user_id = ?', [uid]);
-      await database.query('DELETE FROM projects WHERE created_by = ?', [uid]);
-      await database.query('DELETE FROM tasks WHERE created_by = ? OR assigned_to = ?', [uid, uid]);
-      await database.query('DELETE FROM notifications WHERE user_id = ?', [uid]);
-      await database.query('DELETE FROM users WHERE id = ?', [uid]);
-    }
+    await cleanupUserByEmail(email);
     admin = await registerAndLogin({
       email: email, password: 'Password123!', firstName: 'Admin', lastName: 'Users', role: 'admin'
     });
   });
 
   beforeEach(async () => {
-    // cleanup non-admin test users possibly created by prior tests
-    await database.query("DELETE FROM users WHERE email LIKE 'test-user-%@example.com%'");
+    await deleteUsersByEmailRegex(/^test-user-.*@example\.com$/);
   });
 
   test('admin can create, list, get, update, update role, deactivate and reactivate a user', async () => {

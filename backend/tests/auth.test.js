@@ -2,6 +2,7 @@ import { jest, describe, test, expect, beforeEach, afterAll } from '@jest/global
 import request from 'supertest';
 import app from '../src/server.js';
 import database from '../src/config/database.js';
+import { cleanupUserByEmail } from './dbTestUtils.mjs';
 
 describe('Authentication Endpoints', () => {
   let testUser = {
@@ -12,13 +13,11 @@ describe('Authentication Endpoints', () => {
   };
 
   beforeEach(async () => {
-    // Clean up test data
-    await database.query('DELETE FROM users WHERE email = ?', [testUser.email]);
+    await cleanupUserByEmail(testUser.email);
   });
 
   afterAll(async () => {
-    // Clean up and close database connection
-    await database.query('DELETE FROM users WHERE email = ?', [testUser.email]);
+    await cleanupUserByEmail(testUser.email);
     await database.close();
   });
 
