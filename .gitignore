@@ -1,0 +1,51 @@
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Dependencies
+node_modules/
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# Build outputs
+build/
+dist/
+out/
+coverage/
+.nyc_output/
+*.tsbuildinfo
+
+# Vite / frontend
+frontend/.vite/
+frontend/playwright-report/
+frontend/test-results/
+frontend/.cache/
+
+# Backend runtime artifacts
+backend/uploads/
+backend/tmp/
+
+# Test artifacts
+junit.xml
+
+# IDE / OS
+.vscode/
+.idea/
+.kiro/
+.DS_Store
+Thumbs.db
+
+# Docker
+*.pid
+*.seed
+*.pid.lock
+
+# Optional local overrides
+docker-compose.override.yml

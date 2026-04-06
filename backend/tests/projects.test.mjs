@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeAll, beforeEach } from '@jest/globals';
 import request from 'supertest';
-import app from '../src/server.js';
-import database from '../src/config/database.js';
+import app from '../src/server.ts';
+import database from '../src/config/database.ts';
 import { cleanupUserByEmail, cleanupUsersByEmails, clearProjectDomainData } from './dbTestUtils.mjs';
 
 // Helper to register and login a user, returning token and user
@@ -139,3 +139,4 @@ describe('Projects API', () => {
     expect(myRes.body.data.projects.length).toBeGreaterThanOrEqual(1);
   });
 });
+
