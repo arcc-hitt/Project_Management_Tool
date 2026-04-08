@@ -3,7 +3,7 @@ import { ObjectId } from 'mongodb';
 export const toObjectId = (value: unknown): ObjectId | null => {
   if (!value) return null;
   if (value instanceof ObjectId) return value;
-  const normalized = typeof value === 'string' || typeof value === 'number' ? value : String(value);
+  const normalized = String(value);
   return ObjectId.isValid(normalized) ? new ObjectId(normalized) : null;
 };
 
