@@ -1,5 +1,5 @@
 /// <reference types="vitest" />
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from "path"
@@ -36,28 +36,40 @@ export default defineConfig({
     cssCodeSplit: true,
     rollupOptions: {
       output: {
-        manualChunks: {
-          // Vendor chunk for React and React DOM
-          'react-vendor': ['react', 'react-dom'],
-          // UI components chunk
-          'ui-vendor': [
-            '@radix-ui/react-dialog',
-            '@radix-ui/react-dropdown-menu',
-            '@radix-ui/react-select',
-            '@radix-ui/react-tabs',
-            '@radix-ui/react-popover',
-            '@radix-ui/react-progress'
-          ],
-          // Charts and data visualization
-          'charts-vendor': ['recharts'],
-          // React Query and API
-          'api-vendor': ['@tanstack/react-query', 'axios'],
-          // Socket.io for real-time features
-          'realtime-vendor': ['socket.io-client'],
-          // Router
-          'router-vendor': ['react-router-dom'],
-          // Date utilities
-          'date-vendor': ['date-fns']
+        manualChunks(id) {
+          if (!id.includes('node_modules')) {
+            return undefined;
+          }
+
+          if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('react-dom')) {
+            return 'react-vendor';
+          }
+
+          if (id.includes('@radix-ui/')) {
+            return 'ui-vendor';
+          }
+
+          if (id.includes('recharts')) {
+            return 'charts-vendor';
+          }
+
+          if (id.includes('@tanstack/react-query') || id.includes('axios')) {
+            return 'api-vendor';
+          }
+
+          if (id.includes('socket.io-client')) {
+            return 'realtime-vendor';
+          }
+
+          if (id.includes('react-router-dom')) {
+            return 'router-vendor';
+          }
+
+          if (id.includes('date-fns')) {
+            return 'date-vendor';
+          }
+
+          return undefined;
         },
         chunkFileNames: (chunkInfo) => {
           if (chunkInfo.name.includes('vendor')) {
