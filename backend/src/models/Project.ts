@@ -1,15 +1,23 @@
 import database from '../config/database.js';
-import { mapDoc, normalizeId, toObjectId, withTimestampsOnCreate, withUpdatedAt } from '../utils/mongo.js';
+import { mapDoc, normalizeId, toObjectId, withTimestampsOnCreate, withUpdatedAt, ObjectId } from '../utils/mongo.js';
 
 class Project {
   [key: string]: any;
 
   constructor(data: any = {}) {
     this.id = data.id;
+    this.organizationId = data.organizationId || data.organization_id;
+    this.projectKey = data.projectKey || data.project_key;
     this.name = data.name;
     this.description = data.description;
     this.status = data.status || 'planning';
     this.priority = data.priority || 'medium';
+    this.leadUserId = data.leadUserId || data.lead_user_id;
+    this.defaultAssigneeId = data.defaultAssigneeId || data.default_assignee_id;
+    this.components = data.components || [];
+    this.versions = data.versions || [];
+    this.workflow = data.workflow || null;
+    this.issueCounter = data.issueCounter !== undefined ? data.issueCounter : 0;
     this.startDate = data.startDate || data.start_date;
     this.endDate = data.endDate || data.end_date;
     this.budget = data.budget;
@@ -34,10 +42,18 @@ class Project {
     try {
       const projects = await Project._collection();
       const payload = withTimestampsOnCreate({
+        organizationId: projectData.organizationId || projectData.organization_id || null,
+        projectKey: projectData.projectKey || projectData.project_key || null,
         name: projectData.name,
         description: projectData.description || null,
         status: projectData.status || 'planning',
         priority: projectData.priority || 'medium',
+        leadUserId: projectData.leadUserId || projectData.lead_user_id || null,
+        defaultAssigneeId: projectData.defaultAssigneeId || projectData.default_assignee_id || null,
+        components: projectData.components || [],
+        versions: projectData.versions || [],
+        workflow: projectData.workflow || null,
+        issueCounter: projectData.issueCounter || 0,
         startDate: projectData.startDate || projectData.start_date || null,
         endDate: projectData.endDate || projectData.end_date || null,
         budget: projectData.budget || null,
@@ -256,10 +272,18 @@ class Project {
   toObject() {
     return {
       id: this.id,
+      organizationId: this.organizationId,
+      projectKey: this.projectKey,
       name: this.name,
       description: this.description,
       status: this.status,
       priority: this.priority,
+      leadUserId: this.leadUserId,
+      defaultAssigneeId: this.defaultAssigneeId,
+      components: this.components,
+      versions: this.versions,
+      workflow: this.workflow,
+      issueCounter: this.issueCounter,
       startDate: this.startDate,
       endDate: this.endDate,
       budget: this.budget,
@@ -473,6 +497,122 @@ class Project {
     }
 
     return errors;
+  }
+
+  static generateProjectKey(name: string): string {
+    const words = name.trim().split(/\s+/);
+    const key = words.map((w) => w[0] || '').join('').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    return key.slice(0, 6);
+  }
+
+  static async incrementIssueCounter(projectId: string): Promise<number> {
+    try {
+      const projects = await Project._collection();
+      const _id = toObjectId(projectId);
+      if (!_id) throw new Error('Invalid project ID');
+
+      const result = await projects.findOneAndUpdate(
+        { _id },
+        { $inc: { issueCounter: 1 } },
+        { returnDocument: 'after' }
+      );
+      if (!result) throw new Error('Project not found');
+      return result.issueCounter as number;
+    } catch (error) {
+      throw new Error(`Error incrementing issue counter: ${error.message}`);
+    }
+  }
+
+  static async addComponent(projectId: string, component: { name: string; description?: string; leadUserId?: string }): Promise<Project> {
+    try {
+      const projects = await Project._collection();
+      const _id = toObjectId(projectId);
+      if (!_id) throw new Error('Invalid project ID');
+
+      const newComponent = {
+        id: new ObjectId().toHexString(),
+        name: component.name,
+        description: component.description || null,
+        leadUserId: component.leadUserId || null,
+      };
+
+      await projects.updateOne({ _id }, { $push: { components: newComponent } as any, $set: { updatedAt: new Date() } });
+      return await Project.findById(projectId);
+    } catch (error) {
+      throw new Error(`Error adding component: ${error.message}`);
+    }
+  }
+
+  static async removeComponent(projectId: string, componentId: string): Promise<Project> {
+    try {
+      const projects = await Project._collection();
+      const issues = await database.getCollection('issues');
+      const _id = toObjectId(projectId);
+      if (!_id) throw new Error('Invalid project ID');
+
+      await projects.updateOne(
+        { _id },
+        { $pull: { components: { id: componentId } } as any, $set: { updatedAt: new Date() } }
+      );
+
+      // Cascade: clear componentId from all issues in this project that reference the deleted component
+      await issues.updateMany(
+        { projectId, componentId },
+        { $unset: { componentId: '' }, $set: { updatedAt: new Date() } }
+      );
+
+      return await Project.findById(projectId);
+    } catch (error) {
+      throw new Error(`Error removing component: ${error.message}`);
+    }
+  }
+
+  static async addVersion(projectId: string, version: { name: string; releaseDate?: Date; status?: string }): Promise<Project> {
+    try {
+      const projects = await Project._collection();
+      const _id = toObjectId(projectId);
+      if (!_id) throw new Error('Invalid project ID');
+
+      const newVersion = {
+        id: new ObjectId().toHexString(),
+        name: version.name,
+        releaseDate: version.releaseDate || null,
+        status: version.status || 'unreleased',
+        releasedAt: null,
+      };
+
+      await projects.updateOne({ _id }, { $push: { versions: newVersion } as any, $set: { updatedAt: new Date() } });
+      return await Project.findById(projectId);
+    } catch (error) {
+      throw new Error(`Error adding version: ${error.message}`);
+    }
+  }
+
+  static async updateVersion(projectId: string, versionId: string, updateData: any): Promise<Project> {
+    try {
+      const projects = await Project._collection();
+      const _id = toObjectId(projectId);
+      if (!_id) throw new Error('Invalid project ID');
+
+      const setFields: Record<string, any> = { updatedAt: new Date() };
+      for (const [key, value] of Object.entries(updateData)) {
+        setFields[`versions.$[v].${key}`] = value;
+      }
+
+      if (updateData.status === 'released') {
+        setFields['versions.$[v].releasedAt'] = new Date();
+      }
+
+      await projects.updateOne(
+        { _id },
+        { $set: setFields },
+        { arrayFilters: [{ 'v.id': versionId }] }
+      );
+
+      return await Project.findById(projectId);
+    } catch (error) {
+      throw new Error(`Error updating version: ${error.message}`);
+    }
   }
 }
 

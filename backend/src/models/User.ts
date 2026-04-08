@@ -19,6 +19,8 @@ class User {
     this.emailVerified = data.emailVerified || data.email_verified || false;
     this.emailVerifiedAt = data.emailVerifiedAt || data.email_verified_at;
     this.isActive = data.isActive !== undefined ? data.isActive : (data.is_active !== undefined ? data.is_active : true);
+    this.organizationId = data.organizationId || data.organization_id;
+    this.ssoProviders = data.ssoProviders || data.sso_providers || [];
     this.createdAt = data.createdAt || data.created_at;
     this.updatedAt = data.updatedAt || data.updated_at;
   }
@@ -48,6 +50,8 @@ class User {
         emailVerified: userData.emailVerified || userData.email_verified || false,
         emailVerifiedAt: userData.emailVerifiedAt || userData.email_verified_at || null,
         isActive: userData.isActive !== undefined ? userData.isActive : (userData.is_active !== undefined ? userData.is_active : true),
+        organizationId: userData.organizationId || userData.organization_id || null,
+        ssoProviders: userData.ssoProviders || userData.sso_providers || [],
       });
 
       const result = await users.insertOne(payload);
@@ -298,6 +302,8 @@ class User {
       emailVerified: this.emailVerified,
       emailVerifiedAt: this.emailVerifiedAt,
       isActive: this.isActive,
+      organizationId: this.organizationId,
+      ssoProviders: this.ssoProviders,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
     };
@@ -513,6 +519,48 @@ class User {
     }
 
     return errors;
+  }
+
+  static async addSSOProvider(userId: string, provider: 'google' | 'github', providerId: string): Promise<User> {
+    try {
+      const users = await User._collection();
+      const _id = toObjectId(userId);
+      if (!_id) throw new Error('Invalid user ID');
+
+      // Check if already exists to avoid duplicates
+      const existing = await users.findOne({
+        _id,
+        'ssoProviders.provider': provider,
+        'ssoProviders.providerId': providerId,
+      });
+
+      if (!existing) {
+        await users.updateOne(
+          { _id },
+          {
+            $push: { ssoProviders: { provider, providerId } } as any,
+            $set: { updatedAt: new Date() },
+          }
+        );
+      }
+
+      return await User.findById(userId, { includeInactive: true });
+    } catch (error) {
+      throw new Error(`Error adding SSO provider: ${error.message}`);
+    }
+  }
+
+  static async findBySSOProvider(provider: string, providerId: string): Promise<User | null> {
+    try {
+      const users = await User._collection();
+      const doc = await users.findOne({
+        'ssoProviders.provider': provider,
+        'ssoProviders.providerId': providerId,
+      });
+      return User._fromDoc(doc);
+    } catch (error) {
+      throw new Error(`Error finding user by SSO provider: ${error.message}`);
+    }
   }
 }
 
