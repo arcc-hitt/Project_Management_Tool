@@ -1,5 +1,5 @@
-import database from '../src/config/database.js';
-import { normalizeId, toObjectId } from '../src/utils/mongo.js';
+import database from '../src/config/database.ts';
+import { normalizeId, toObjectId } from '../src/utils/mongo.ts';
 
 const getCollections = async () => {
   const db = await database.connect();
@@ -96,3 +96,4 @@ export const deleteUsersByEmailRegex = async (pattern) => {
     await cleanupUserById(normalizeId(row._id));
   }
 };
+

@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeAll, beforeEach } from '@jest/globals';
 import request from 'supertest';
-import app from '../src/server.js';
+import app from '../src/server.ts';
 import { cleanupUserByEmail, cleanupUsersByEmails, clearProjectDomainData } from './dbTestUtils.mjs';
 
 async function registerAndLogin(user) {
@@ -84,3 +84,4 @@ describe('Comments API', () => {
       .expect(200);
   });
 });
+

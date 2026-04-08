@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeAll } from '@jest/globals';
 import request from 'supertest';
-import app from '../src/server.js';
+import app from '../src/server.ts';
 import { cleanupUserByEmail, cleanupUsersByEmails } from './dbTestUtils.mjs';
 
 async function registerAndLogin(user) {
@@ -45,3 +45,4 @@ describe('Dashboard API', () => {
     expect(mgrRes.body.success).toBe(true);
   });
 });
+

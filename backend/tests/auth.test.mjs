@@ -1,7 +1,7 @@
 import { jest, describe, test, expect, beforeEach, afterAll } from '@jest/globals';
 import request from 'supertest';
-import app from '../src/server.js';
-import database from '../src/config/database.js';
+import app from '../src/server.ts';
+import database from '../src/config/database.ts';
 import { cleanupUserByEmail } from './dbTestUtils.mjs';
 
 describe('Authentication Endpoints', () => {
@@ -234,3 +234,4 @@ describe('Authentication Endpoints', () => {
     });
   });
 });
+

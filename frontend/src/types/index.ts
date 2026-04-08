@@ -18,7 +18,8 @@ export interface Project {
   endDate?: string;
   status: 'planning' | 'active' | 'on_hold' | 'completed' | 'cancelled';
   priority: 'low' | 'medium' | 'high' | 'critical';
-  managerId: number;
+  createdBy: number;
+  managerId?: number;
   manager?: User;
   createdAt: string;
   updatedAt: string;
@@ -103,7 +104,8 @@ export interface CreateProjectRequest {
   description: string;
   startDate: string;
   endDate?: string;
-  managerId: number;
+  createdBy?: number;
+  managerId?: number;
   teamMemberIds?: number[];
 }
 
@@ -112,7 +114,8 @@ export interface UpdateProjectRequest {
   description?: string;
   startDate?: string;
   endDate?: string;
-  status?: 'planning' | 'in-progress' | 'completed' | 'on-hold';
+  status?: 'planning' | 'active' | 'on_hold' | 'completed' | 'cancelled' | 'in-progress' | 'on-hold';
+  createdBy?: number;
   managerId?: number;
 }
 
@@ -121,7 +124,7 @@ export interface CreateTaskRequest {
   description: string;
   projectId: number;
   assigneeId?: number;
-  priority: 'low' | 'medium' | 'high' | 'urgent';
+  priority: 'low' | 'medium' | 'high' | 'critical' | 'urgent';
   dueDate?: string;
   estimatedHours?: number;
 }
@@ -129,8 +132,8 @@ export interface CreateTaskRequest {
 export interface UpdateTaskRequest {
   title?: string;
   description?: string;
-  status?: 'todo' | 'in-progress' | 'review' | 'done';
-  priority?: 'low' | 'medium' | 'high' | 'urgent';
+  status?: 'todo' | 'in_progress' | 'in_review' | 'done' | 'in-progress' | 'review';
+  priority?: 'low' | 'medium' | 'high' | 'critical' | 'urgent';
   assigneeId?: number;
   dueDate?: string;
   estimatedHours?: number;
