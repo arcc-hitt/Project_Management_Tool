@@ -214,6 +214,59 @@ class SearchController {
     }
   }
 
+  async searchIssues(req, res) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation failed',
+          errors: errors.array()
+        });
+      }
+
+      const {
+        query,
+        page = 1,
+        limit = 25,
+        issueType,
+        status,
+        priority,
+        assigneeId,
+        projectId,
+        sprintId,
+        label,
+        componentId,
+      } = req.query;
+
+      const result = await searchService.searchIssues({
+        query,
+        page: parseInt(String(page), 10),
+        limit: parseInt(String(limit), 10),
+        issueType,
+        status,
+        priority,
+        assigneeId,
+        projectId,
+        sprintId,
+        label,
+        componentId,
+      });
+
+      res.json({
+        success: true,
+        data: result
+      });
+
+    } catch (error) {
+      console.error('Issue search error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error during issue search'
+      });
+    }
+  }
+
   async advancedSearch(req, res) {
     try {
       const errors = validationResult(req);

@@ -1,5 +1,6 @@
 ﻿import database from '../config/database.js';
 import { mapDoc, normalizeId, toObjectId } from '../utils/mongo.js';
+import Issue from '../models/Issue.js';
 
 class SearchService {
   async unifiedSearch(options: any = {}) {
@@ -176,6 +177,78 @@ class SearchService {
       mapped.userName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : null;
       return mapped;
     });
+  }
+
+  async searchIssues(options: any = {}) {
+    const {
+      query = '',
+      page = 1,
+      limit = 25,
+      issueType,
+      status,
+      priority,
+      assigneeId,
+      projectId,
+      sprintId,
+      label,
+      componentId,
+    } = options;
+
+    const pageNum = Math.max(1, parseInt(String(page), 10));
+    const limitNum = Math.min(100, Math.max(1, parseInt(String(limit), 10)));
+    const offset = (pageNum - 1) * limitNum;
+
+    const findOptions: any = {
+      limit: limitNum,
+      offset,
+    };
+
+    if (query && query.trim().length > 0) findOptions.search = query.trim();
+    if (issueType) findOptions.issueType = issueType;
+    if (status) findOptions.status = status;
+    if (priority) findOptions.priority = priority;
+    if (assigneeId) findOptions.assignedTo = assigneeId;
+    if (projectId) findOptions.projectId = projectId;
+    if (sprintId) findOptions.sprintId = sprintId;
+    if (componentId) findOptions.componentId = componentId;
+
+    // label filter requires special handling (array field)
+    let issues = await Issue.findAll(findOptions);
+
+    if (label) {
+      issues = issues.filter((issue) =>
+        Array.isArray(issue.labels) && issue.labels.includes(label)
+      );
+    }
+
+    // Count total for pagination
+    const issuesCollection = await database.getCollection('issues');
+    const countFilter: Record<string, any> = {};
+    if (query && query.trim().length > 0) {
+      const regex = new RegExp(query.trim(), 'i');
+      countFilter.$or = [{ title: regex }, { description: regex }];
+    }
+    if (issueType) countFilter.issueType = issueType;
+    if (status) countFilter.status = status;
+    if (priority) countFilter.priority = priority;
+    if (assigneeId) countFilter.assignedTo = assigneeId;
+    if (projectId) countFilter.projectId = projectId;
+    if (sprintId) countFilter.sprintId = sprintId;
+    if (componentId) countFilter.componentId = componentId;
+    if (label) countFilter.labels = label;
+
+    const totalItems = await issuesCollection.countDocuments(countFilter);
+    const totalPages = Math.ceil(totalItems / limitNum);
+
+    return {
+      issues,
+      pagination: {
+        totalItems,
+        totalPages,
+        currentPage: pageNum,
+        itemsPerPage: limitNum,
+      },
+    };
   }
 
   async getSearchSuggestions(options: any = {}) {

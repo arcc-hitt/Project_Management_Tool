@@ -317,6 +317,52 @@ export const advancedSearchValidation = [
     .withMessage('Comment pagination must be an object')
 ];
 
+// Issue search validation
+export const issueSearchValidation = [
+  ...searchQueryValidation,
+
+  query('issueType')
+    .optional()
+    .isIn(['task', 'bug', 'epic'])
+    .withMessage('Invalid issueType value'),
+
+  query('status')
+    .optional()
+    .isIn(['todo', 'in_progress', 'in_review', 'done'])
+    .withMessage('Invalid issue status'),
+
+  query('priority')
+    .optional()
+    .isIn(['low', 'medium', 'high', 'critical'])
+    .withMessage('Invalid priority value'),
+
+  query('assigneeId')
+    .optional()
+    .isString()
+    .withMessage('Assignee ID must be a string'),
+
+  query('projectId')
+    .optional()
+    .isString()
+    .withMessage('Project ID must be a string'),
+
+  query('sprintId')
+    .optional()
+    .isString()
+    .withMessage('Sprint ID must be a string'),
+
+  query('label')
+    .optional()
+    .isString()
+    .trim()
+    .withMessage('Label must be a string'),
+
+  query('componentId')
+    .optional()
+    .isString()
+    .withMessage('Component ID must be a string'),
+];
+
 // Custom validation for date ranges
 export const validateDateRange = (req, res, next) => {
   const { startDate, endDate } = req.query;
