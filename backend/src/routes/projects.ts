@@ -1,7 +1,9 @@
 import express from 'express';
 import projectController from '../controllers/projectController.js';
+import Project from '../models/Project.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorizeRoles } from '../middleware/rbac.js';
+import { formatApiResponse, formatErrorResponse } from '../utils/helpers.js';
 import {
   createProjectValidation,
   updateProjectValidation,
@@ -675,5 +677,51 @@ router.put('/:id/members/:userId',
   updateMemberRoleValidation,
   projectController.updateMemberRole
 );
+
+// Component management
+router.post('/:id/components', authenticateToken, async (req, res) => {
+  try {
+    const project = await Project.addComponent(req.params.id, req.body);
+    if (!project) return res.status(404).json(formatErrorResponse('Project not found'));
+    return res.status(200).json(formatApiResponse(project, 'Component added successfully'));
+  } catch (error) {
+    console.error('addComponent error:', error);
+    return res.status(error.statusCode || 500).json(formatErrorResponse(error.message));
+  }
+});
+
+router.delete('/:id/components/:cid', authenticateToken, async (req, res) => {
+  try {
+    const project = await Project.removeComponent(req.params.id, req.params.cid);
+    if (!project) return res.status(404).json(formatErrorResponse('Project not found'));
+    return res.status(200).json(formatApiResponse(project, 'Component removed successfully'));
+  } catch (error) {
+    console.error('removeComponent error:', error);
+    return res.status(error.statusCode || 500).json(formatErrorResponse(error.message));
+  }
+});
+
+// Version management
+router.post('/:id/versions', authenticateToken, async (req, res) => {
+  try {
+    const project = await Project.addVersion(req.params.id, req.body);
+    if (!project) return res.status(404).json(formatErrorResponse('Project not found'));
+    return res.status(200).json(formatApiResponse(project, 'Version added successfully'));
+  } catch (error) {
+    console.error('addVersion error:', error);
+    return res.status(error.statusCode || 500).json(formatErrorResponse(error.message));
+  }
+});
+
+router.put('/:id/versions/:vid', authenticateToken, async (req, res) => {
+  try {
+    const project = await Project.updateVersion(req.params.id, req.params.vid, req.body);
+    if (!project) return res.status(404).json(formatErrorResponse('Project not found'));
+    return res.status(200).json(formatApiResponse(project, 'Version updated successfully'));
+  } catch (error) {
+    console.error('updateVersion error:', error);
+    return res.status(error.statusCode || 500).json(formatErrorResponse(error.message));
+  }
+});
 
 export default router;

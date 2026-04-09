@@ -23,6 +23,9 @@ import activityRoutes from './routes/activities.js';
 import dashboardRoutes from './routes/dashboard.js';
 import searchRoutes from './routes/search.js';
 import notificationRoutes from './routes/notifications.js';
+import issueRoutes from './routes/issueRoutes.js';
+import boardRoutes from './routes/boardRoutes.js';
+import sprintRoutes from './routes/sprintRoutes.js';
 // import aiRoutes from './routes/ai.js';
 
 const app = express();
@@ -93,6 +96,9 @@ app.use('/api/activities', activityRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/issues', issueRoutes);
+app.use('/api', boardRoutes);
+app.use('/api', sprintRoutes);
 // app.use('/api/ai', aiRoutes);
 
 // Default route
