@@ -2,6 +2,7 @@ import Issue from '../models/Issue.js';
 import Project from '../models/Project.js';
 import boardService from '../services/boardService.js';
 import { formatApiResponse, formatErrorResponse, getPaginationData } from '../utils/helpers.js';
+import { notifyIssueAssigned } from '../utils/notificationUtils.js';
 
 class IssueController {
   async listIssues(req, res) {
@@ -50,6 +51,12 @@ class IssueController {
 
       const issueKey = `${project.projectKey || 'ISSUE'}-${counter}`;
       const issue = await Issue.create({ ...data, issueKey });
+      // Notify assignee if set at creation (Req 4.1)
+      if (issue.assignedTo && issue.assignedTo !== issue.createdBy) {
+        notifyIssueAssigned(issue.id, issue.assignedTo, issue.createdBy).catch((err) => {
+          console.error('notifyIssueAssigned (create) error:', err);
+        });
+      }
       return res.status(201).json(formatApiResponse(issue, 'Issue created successfully'));
     } catch (error) {
       console.error('createIssue error:', error);
@@ -77,10 +84,26 @@ class IssueController {
         return res.status(400).json(formatErrorResponse('Validation failed', errors));
       }
 
+      // Capture previous assignee before update
+      const existingIssue = await Issue.findById(req.params.id);
+      if (!existingIssue) {
+        return res.status(404).json(formatErrorResponse('Issue not found'));
+      }
+
       const issue = await Issue.update(req.params.id, req.body);
       if (!issue) {
         return res.status(404).json(formatErrorResponse('Issue not found'));
       }
+
+      // Notify new assignee if assignee changed (Req 4.1)
+      const newAssignee = req.body.assignedTo || req.body.assigned_to;
+      if (newAssignee && newAssignee !== existingIssue.assignedTo) {
+        const actorId = req.user?.id;
+        notifyIssueAssigned(req.params.id, newAssignee, actorId).catch((err) => {
+          console.error('notifyIssueAssigned error:', err);
+        });
+      }
+
       return res.status(200).json(formatApiResponse(issue, 'Issue updated successfully'));
     } catch (error) {
       console.error('updateIssue error:', error);

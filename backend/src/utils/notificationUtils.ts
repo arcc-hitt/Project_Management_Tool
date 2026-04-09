@@ -14,6 +14,7 @@ export const createNotification = async ({
   relatedEntityId = null,
   metadata = null,
 }) => {
+  // Persist notification record first — must succeed even if emit fails
   const notification = await Notification.create({
     userId,
     type,
@@ -24,7 +25,15 @@ export const createNotification = async ({
     metadata,
   });
 
-  notificationEmitter.emit('notification', { userId, notification });
+  // Emit Socket.IO event; wrapped in try/catch per Req 4.7
+  try {
+    notificationEmitter.emit('notification:new', { userId, notification });
+    // Also emit on legacy 'notification' channel for backward compat
+    notificationEmitter.emit('notification', { userId, notification });
+  } catch (emitErr) {
+    console.error('Socket.IO emit failed (notification persisted):', emitErr);
+  }
+
   return notification;
 };
 
@@ -160,6 +169,208 @@ export const checkUpcomingDeadlines = async () => {
 export const scheduleDeadlineReminders = () => {
   setInterval(checkUpcomingDeadlines, 60 * 60 * 1000);
   checkUpcomingDeadlines();
+};
+
+/**
+ * Notify a user that an issue was assigned to them (Req 4.1).
+ */
+export const notifyIssueAssigned = async (issueId: string, assigneeId: string, assignerId: string) => {
+  try {
+    const issues = await database.getCollection('issues');
+    const users = await database.getCollection('users');
+
+    const issue = await issues.findOne({ _id: toObjectId(issueId) });
+    if (!issue) return null;
+
+    const assigner = await users.findOne({ _id: toObjectId(assignerId) });
+    const assignerName = assigner
+      ? `${assigner.firstName || ''} ${assigner.lastName || ''}`.trim()
+      : 'Someone';
+
+    return createNotification({
+      userId: assigneeId,
+      type: 'issue_assigned',
+      title: `Issue Assigned: ${issue.issueKey || issue.title}`,
+      message: `${assignerName} assigned you the issue "${issue.title}".`,
+      relatedEntityType: 'issue',
+      relatedEntityId: issueId,
+      metadata: { assignedBy: assignerId, assignedByName: assignerName },
+    });
+  } catch (err) {
+    console.error('notifyIssueAssigned error:', err);
+    return null;
+  }
+};
+
+/**
+ * Notify issue assignee and creator when a comment is added to an issue (Req 4.2).
+ * Excludes the commenter from notifications.
+ */
+export const notifyIssueCommentAdded = async (
+  issueId: string,
+  commenterId: string,
+  commentBody: string
+) => {
+  try {
+    const issues = await database.getCollection('issues');
+    const users = await database.getCollection('users');
+
+    const issue = await issues.findOne({ _id: toObjectId(issueId) });
+    if (!issue) return [];
+
+    const commenter = await users.findOne({ _id: toObjectId(commenterId) });
+    const commenterName = commenter
+      ? `${commenter.firstName || ''} ${commenter.lastName || ''}`.trim()
+      : 'Someone';
+
+    const recipientIds = new Set<string>();
+    if (issue.assignedTo && issue.assignedTo !== commenterId) {
+      recipientIds.add(issue.assignedTo);
+    }
+    if (issue.createdBy && issue.createdBy !== commenterId) {
+      recipientIds.add(issue.createdBy);
+    }
+
+    const notifications = [];
+    for (const recipientId of recipientIds) {
+      try {
+        const notif = await createNotification({
+          userId: recipientId,
+          type: 'comment_added',
+          title: `New Comment on ${issue.issueKey || issue.title}`,
+          message: `${commenterName} commented on "${issue.title}": ${commentBody.substring(0, 100)}${commentBody.length > 100 ? '...' : ''}`,
+          relatedEntityType: 'issue',
+          relatedEntityId: issueId,
+          metadata: { commenterId, commenterName },
+        });
+        notifications.push(notif);
+      } catch (err) {
+        console.error(`notifyIssueCommentAdded: failed for recipient ${recipientId}:`, err);
+      }
+    }
+    return notifications;
+  } catch (err) {
+    console.error('notifyIssueCommentAdded error:', err);
+    return [];
+  }
+};
+
+/**
+ * Parse @username tokens from a comment body and create mention notifications (Req 4.5).
+ * Excludes the commenter from being notified of their own mention.
+ */
+export const notifyMentions = async (
+  commentBody: string,
+  issueId: string,
+  commenterId: string
+) => {
+  try {
+    // Extract all @username tokens (alphanumeric + underscore)
+    const mentionRegex = /@([\w]+)/g;
+    const usernames: string[] = [];
+    let match: RegExpExecArray | null;
+    while ((match = mentionRegex.exec(commentBody)) !== null) {
+      usernames.push(match[1]);
+    }
+
+    if (!usernames.length) return [];
+
+    const users = await database.getCollection('users');
+    const issues = await database.getCollection('issues');
+
+    const issue = await issues.findOne({ _id: toObjectId(issueId) });
+    const issueTitle = issue?.title || issueId;
+    const issueKey = issue?.issueKey || issueId;
+
+    const commenter = await users.findOne({ _id: toObjectId(commenterId) });
+    const commenterName = commenter
+      ? `${commenter.firstName || ''} ${commenter.lastName || ''}`.trim()
+      : 'Someone';
+
+    const notifications = [];
+    const notifiedUserIds = new Set<string>();
+
+    for (const username of usernames) {
+      // Look up user by email prefix or firstName match — use email local part
+      const userDoc = await users.findOne({
+        $or: [
+          { email: new RegExp(`^${username}@`, 'i') },
+          { firstName: new RegExp(`^${username}$`, 'i') },
+        ],
+        isActive: true,
+      });
+
+      if (!userDoc) continue;
+
+      const mentionedUserId = normalizeId(userDoc._id);
+      // Skip commenter and already-notified users
+      if (mentionedUserId === commenterId) continue;
+      if (notifiedUserIds.has(mentionedUserId)) continue;
+      notifiedUserIds.add(mentionedUserId);
+
+      try {
+        const notif = await createNotification({
+          userId: mentionedUserId,
+          type: 'mention',
+          title: `You were mentioned in ${issueKey}`,
+          message: `${commenterName} mentioned you in "${issueTitle}": ${commentBody.substring(0, 100)}${commentBody.length > 100 ? '...' : ''}`,
+          relatedEntityType: 'issue',
+          relatedEntityId: issueId,
+          metadata: { mentionedBy: commenterId, mentionedByName: commenterName, username },
+        });
+        notifications.push(notif);
+      } catch (err) {
+        console.error(`notifyMentions: failed for user ${mentionedUserId}:`, err);
+      }
+    }
+
+    return notifications;
+  } catch (err) {
+    console.error('notifyMentions error:', err);
+    return [];
+  }
+};
+
+/**
+ * Notify all project members when a sprint starts (Req 4.3).
+ * Fan-out via notifyProjectMembers; Socket.IO emission wrapped in try/catch.
+ */
+export const notifySprintStarted = async (sprintId: string, projectId: string, sprintName: string) => {
+  try {
+    return await notifyProjectMembers(projectId, {
+      type: 'sprint_started',
+      title: `Sprint Started: ${sprintName}`,
+      message: `Sprint "${sprintName}" has been started.`,
+      relatedEntityType: 'sprint',
+      relatedEntityId: sprintId,
+    });
+  } catch (err) {
+    console.error('notifySprintStarted error:', err);
+    return [];
+  }
+};
+
+/**
+ * Notify all project members when a sprint closes (Req 4.4).
+ */
+export const notifySprintClosed = async (
+  sprintId: string,
+  projectId: string,
+  sprintName: string,
+  completedIssueCount: number
+) => {
+  try {
+    return await notifyProjectMembers(projectId, {
+      type: 'sprint_closed',
+      title: `Sprint Closed: ${sprintName}`,
+      message: `Sprint "${sprintName}" has been closed. ${completedIssueCount} issues completed.`,
+      relatedEntityType: 'sprint',
+      relatedEntityId: sprintId,
+    });
+  } catch (err) {
+    console.error('notifySprintClosed error:', err);
+    return [];
+  }
 };
 
 export const getNotificationTemplate = (type, data) => {
