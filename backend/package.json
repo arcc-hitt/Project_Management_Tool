@@ -66,27 +66,72 @@
     "typescript": "^6.0.2"
   },
   "jest": {
-    "testEnvironment": "node",
-    "transform": {
-      "^.+\\.tsx?$": [
-        "ts-jest",
-        {
-          "useESM": true,
-          "tsconfig": "tsconfig.json"
-        }
-      ]
-    },
-    "extensionsToTreatAsEsm": [
-      ".ts"
-    ],
-    "moduleNameMapper": {
-      "^(\\.{1,2}/.*)\\.js$": "$1"
-    },
-    "setupFilesAfterEnv": [
-      "<rootDir>/tests/setup.mjs"
-    ],
-    "testMatch": [
-      "**/tests/**/*.test.mjs"
+    "projects": [
+      {
+        "displayName": "integration",
+        "testEnvironment": "node",
+        "transform": {
+          "^.+\\.tsx?$": [
+            "ts-jest",
+            {
+              "useESM": true,
+              "tsconfig": {
+                "module": "NodeNext",
+                "moduleResolution": "NodeNext",
+                "target": "ES2022",
+                "esModuleInterop": true,
+                "resolveJsonModule": true,
+                "strict": false,
+                "noImplicitAny": false,
+                "skipLibCheck": true
+              }
+            }
+          ]
+        },
+        "extensionsToTreatAsEsm": [
+          ".ts"
+        ],
+        "moduleNameMapper": {
+          "^(\\.{1,2}/.*)\\.js$": "$1"
+        },
+        "setupFilesAfterEnv": [
+          "<rootDir>/tests/setup.mjs"
+        ],
+        "testMatch": [
+          "**/tests/**/*.test.mjs"
+        ]
+      },
+      {
+        "displayName": "properties",
+        "testEnvironment": "node",
+        "transform": {
+          "^.+\\.tsx?$": [
+            "ts-jest",
+            {
+              "useESM": true,
+              "tsconfig": {
+                "module": "NodeNext",
+                "moduleResolution": "NodeNext",
+                "target": "ES2022",
+                "esModuleInterop": true,
+                "resolveJsonModule": true,
+                "strict": false,
+                "noImplicitAny": false,
+                "skipLibCheck": true
+              }
+            }
+          ]
+        },
+        "extensionsToTreatAsEsm": [
+          ".ts"
+        ],
+        "moduleNameMapper": {
+          "^(\\.{1,2}/.*)\\.js$": "$1"
+        },
+        "testMatch": [
+          "**/tests/properties/**/*.test.ts"
+        ]
+      }
     ]
   }
 }
