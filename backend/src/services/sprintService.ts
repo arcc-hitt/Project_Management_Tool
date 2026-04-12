@@ -1,7 +1,7 @@
 import Sprint from '../models/Sprint.js';
 import Issue from '../models/Issue.js';
 import Project from '../models/Project.js';
-import { notifyProjectMembers } from '../utils/notificationUtils.js';
+import { notifyProjectMembers, notifySprintStarted, notifySprintClosed } from '../utils/notificationUtils.js';
 
 const createError = (message: string, statusCode: number) => {
   const err: any = new Error(message);
@@ -71,13 +71,7 @@ class SprintService {
 
     // Emit sprint_started notifications to all project members
     try {
-      await notifyProjectMembers(sprint.projectId, {
-        type: 'sprint_started',
-        title: `Sprint Started: ${sprint.name}`,
-        message: `Sprint "${sprint.name}" has been started.`,
-        relatedEntityType: 'sprint',
-        relatedEntityId: sprintId,
-      });
+      await notifySprintStarted(sprintId, sprint.projectId, sprint.name);
     } catch (notifErr) {
       console.error('Failed to send sprint_started notifications:', notifErr);
     }
@@ -146,13 +140,7 @@ class SprintService {
 
     // Emit sprint_closed notifications
     try {
-      await notifyProjectMembers(sprint.projectId, {
-        type: 'sprint_closed',
-        title: `Sprint Closed: ${sprint.name}`,
-        message: `Sprint "${sprint.name}" has been closed. ${completedIssueCount} issues completed.`,
-        relatedEntityType: 'sprint',
-        relatedEntityId: sprintId,
-      });
+      await notifySprintClosed(sprintId, sprint.projectId, sprint.name, completedIssueCount);
     } catch (notifErr) {
       console.error('Failed to send sprint_closed notifications:', notifErr);
     }

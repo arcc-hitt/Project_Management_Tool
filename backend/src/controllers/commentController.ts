@@ -2,6 +2,7 @@ import { Comment, ActivityLog } from '../models/index.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { sendSuccess, sendError } from '../utils/helpers.js';
 import { validationResult } from 'express-validator';
+import { notifyIssueCommentAdded, notifyMentions } from '../utils/notificationUtils.js';
 
 /**
  * @swagger
@@ -132,6 +133,14 @@ export const createComment = asyncHandler(async (req, res) => {
       null,
       { comment: comment.substring(0, 100) + (comment.length > 100 ? '...' : '') }
     );
+
+    // Fire notifications asynchronously — do not block response (Req 4.2, 4.5)
+    notifyIssueCommentAdded(taskId, userId, comment).catch((err) => {
+      console.error('notifyIssueCommentAdded error:', err);
+    });
+    notifyMentions(comment, taskId, userId).catch((err) => {
+      console.error('notifyMentions error:', err);
+    });
 
     return sendSuccess(res, 'Comment created successfully', { comment: newComment }, 201);
 

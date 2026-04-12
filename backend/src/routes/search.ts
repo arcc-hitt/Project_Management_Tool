@@ -9,6 +9,7 @@ import {
   commentSearchValidation,
   searchSuggestionsValidation,
   advancedSearchValidation,
+  issueSearchValidation,
   validateDateRange,
   validatePagination
 } from '../middleware/searchValidation.js';
@@ -392,6 +393,91 @@ router.get('/tasks',
   validateDateRange,
   validatePagination,
   searchController.searchTasks
+);
+
+/**
+ * @swagger
+ * /api/search/issues:
+ *   get:
+ *     summary: Search issues with specific filters
+ *     tags: [Search]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: query
+ *         schema:
+ *           type: string
+ *         description: Search query text (matches title or description, case-insensitive)
+ *       - in: query
+ *         name: issueType
+ *         schema:
+ *           type: string
+ *           enum: [task, bug, epic]
+ *         description: Filter by issue type
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [todo, in_progress, in_review, done]
+ *         description: Filter by status
+ *       - in: query
+ *         name: priority
+ *         schema:
+ *           type: string
+ *           enum: [low, medium, high, critical]
+ *         description: Filter by priority
+ *       - in: query
+ *         name: assigneeId
+ *         schema:
+ *           type: string
+ *         description: Filter by assignee ID
+ *       - in: query
+ *         name: projectId
+ *         schema:
+ *           type: string
+ *         description: Filter by project ID
+ *       - in: query
+ *         name: sprintId
+ *         schema:
+ *           type: string
+ *         description: Filter by sprint ID
+ *       - in: query
+ *         name: label
+ *         schema:
+ *           type: string
+ *         description: Filter by label
+ *       - in: query
+ *         name: componentId
+ *         schema:
+ *           type: string
+ *         description: Filter by component ID
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 25
+ *     responses:
+ *       200:
+ *         description: Issue search completed successfully
+ *       400:
+ *         description: Invalid search parameters
+ *       401:
+ *         description: Authentication required
+ */
+router.get('/issues',
+  authenticateToken,
+  issueSearchValidation,
+  validatePagination,
+  searchController.searchIssues
 );
 
 /**

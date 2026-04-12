@@ -334,7 +334,7 @@ class Notification {
     const errors = [];
     if (!data.userId) errors.push('User ID is required');
     if (!data.type) errors.push('Notification type is required');
-    if (data.type && !['task_assigned', 'task_updated', 'task_completed', 'project_updated', 'comment_added', 'deadline_reminder', 'test', 'deadline', 'mention'].includes(data.type)) {
+    if (data.type && !['task_assigned', 'task_updated', 'task_completed', 'project_updated', 'comment_added', 'deadline_reminder', 'test', 'deadline', 'mention', 'issue_assigned', 'issue_updated', 'sprint_started', 'sprint_closed'].includes(data.type)) {
       errors.push('Invalid notification type');
     }
     if (!data.title || data.title.trim().length === 0) errors.push('Notification title is required');

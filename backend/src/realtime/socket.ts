@@ -132,6 +132,18 @@ export const initSocketIO = (httpServer: any) => {
     });
   });
 
+  notificationEmitter.on('notification:new', ({ userId, notification }) => {
+    if (!io) return;
+    try {
+      io.to(`user_${userId}`).emit('notification:new', {
+        ...notification,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (emitErr) {
+      console.error('Socket.IO notification:new emit failed:', emitErr);
+    }
+  });
+
   notificationEmitter.on('notification', ({ userId, notification }) => {
     if (!io) return;
 
