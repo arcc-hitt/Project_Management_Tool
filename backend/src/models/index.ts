@@ -10,6 +10,7 @@ import Notification from './Notification.js';
 import ActivityLog from './ActivityLog.js';
 import TimeEntry from './TimeEntry.js';
 import ProjectMember from './ProjectMember.js';
+import SavedFilter from './SavedFilter.js';
 
 // Task is an alias for Issue for backward compatibility
 const Task = Issue;
@@ -24,7 +25,8 @@ export {
   Notification,
   ActivityLog,
   TimeEntry,
-  ProjectMember
+  ProjectMember,
+  SavedFilter
 };
 
 export default {
@@ -37,5 +39,6 @@ export default {
   Notification,
   ActivityLog,
   TimeEntry,
-  ProjectMember
+  ProjectMember,
+  SavedFilter
 };

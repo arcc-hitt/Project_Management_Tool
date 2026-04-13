@@ -1,6 +1,8 @@
 ﻿import database from '../config/database.js';
 import { mapDoc, normalizeId, toObjectId } from '../utils/mongo.js';
 import Issue from '../models/Issue.js';
+import SavedFilter, { FilterCriteria } from '../models/SavedFilter.js';
+import ProjectMember from '../models/ProjectMember.js';
 
 class SearchService {
   async unifiedSearch(options: any = {}) {
@@ -192,6 +194,17 @@ class SearchService {
       sprintId,
       label,
       componentId,
+      bugSeverity,
+      versionId,
+      epicId,
+      storyPointsMin,
+      storyPointsMax,
+      createdAtFrom,
+      createdAtTo,
+      updatedAtFrom,
+      updatedAtTo,
+      dueDateFrom,
+      dueDateTo,
     } = options;
 
     const pageNum = Math.max(1, parseInt(String(page), 10));
@@ -211,14 +224,55 @@ class SearchService {
     if (projectId) findOptions.projectId = projectId;
     if (sprintId) findOptions.sprintId = sprintId;
     if (componentId) findOptions.componentId = componentId;
+    if (bugSeverity) findOptions.bugSeverity = bugSeverity;
+    if (versionId) findOptions.versionId = versionId;
+    if (epicId) findOptions.epicId = epicId;
 
     // label filter requires special handling (array field)
     let issues = await Issue.findAll(findOptions);
 
+    // Apply post-fetch filters that Issue.findAll doesn't support natively
     if (label) {
+      const labelArr = Array.isArray(label) ? label : [label];
       issues = issues.filter((issue) =>
-        Array.isArray(issue.labels) && issue.labels.includes(label)
+        Array.isArray(issue.labels) && labelArr.some((l) => issue.labels.includes(l))
       );
+    }
+
+    if (storyPointsMin !== undefined && storyPointsMin !== null) {
+      const min = Number(storyPointsMin);
+      issues = issues.filter((issue) => issue.storyPoints != null && issue.storyPoints >= min);
+    }
+    if (storyPointsMax !== undefined && storyPointsMax !== null) {
+      const max = Number(storyPointsMax);
+      issues = issues.filter((issue) => issue.storyPoints != null && issue.storyPoints <= max);
+    }
+
+    if (createdAtFrom) {
+      const from = new Date(createdAtFrom);
+      issues = issues.filter((issue) => issue.createdAt && new Date(issue.createdAt) >= from);
+    }
+    if (createdAtTo) {
+      const to = new Date(createdAtTo);
+      issues = issues.filter((issue) => issue.createdAt && new Date(issue.createdAt) <= to);
+    }
+
+    if (updatedAtFrom) {
+      const from = new Date(updatedAtFrom);
+      issues = issues.filter((issue) => issue.updatedAt && new Date(issue.updatedAt) >= from);
+    }
+    if (updatedAtTo) {
+      const to = new Date(updatedAtTo);
+      issues = issues.filter((issue) => issue.updatedAt && new Date(issue.updatedAt) <= to);
+    }
+
+    if (dueDateFrom) {
+      const from = new Date(dueDateFrom);
+      issues = issues.filter((issue) => issue.dueDate && new Date(issue.dueDate) >= from);
+    }
+    if (dueDateTo) {
+      const to = new Date(dueDateTo);
+      issues = issues.filter((issue) => issue.dueDate && new Date(issue.dueDate) <= to);
     }
 
     // Count total for pagination
@@ -235,7 +289,34 @@ class SearchService {
     if (projectId) countFilter.projectId = projectId;
     if (sprintId) countFilter.sprintId = sprintId;
     if (componentId) countFilter.componentId = componentId;
-    if (label) countFilter.labels = label;
+    if (bugSeverity) countFilter.bugSeverity = bugSeverity;
+    if (versionId) countFilter.versionId = versionId;
+    if (epicId) countFilter.epicId = epicId;
+    if (label) {
+      const labelArr = Array.isArray(label) ? label : [label];
+      countFilter.labels = { $in: labelArr };
+    }
+    if (storyPointsMin !== undefined && storyPointsMin !== null) {
+      countFilter.storyPoints = { ...countFilter.storyPoints, $gte: Number(storyPointsMin) };
+    }
+    if (storyPointsMax !== undefined && storyPointsMax !== null) {
+      countFilter.storyPoints = { ...countFilter.storyPoints, $lte: Number(storyPointsMax) };
+    }
+    if (createdAtFrom || createdAtTo) {
+      countFilter.createdAt = {};
+      if (createdAtFrom) countFilter.createdAt.$gte = new Date(createdAtFrom);
+      if (createdAtTo) countFilter.createdAt.$lte = new Date(createdAtTo);
+    }
+    if (updatedAtFrom || updatedAtTo) {
+      countFilter.updatedAt = {};
+      if (updatedAtFrom) countFilter.updatedAt.$gte = new Date(updatedAtFrom);
+      if (updatedAtTo) countFilter.updatedAt.$lte = new Date(updatedAtTo);
+    }
+    if (dueDateFrom || dueDateTo) {
+      countFilter.dueDate = {};
+      if (dueDateFrom) countFilter.dueDate.$gte = new Date(dueDateFrom);
+      if (dueDateTo) countFilter.dueDate.$lte = new Date(dueDateTo);
+    }
 
     const totalItems = await issuesCollection.countDocuments(countFilter);
     const totalPages = Math.ceil(totalItems / limitNum);
@@ -249,6 +330,59 @@ class SearchService {
         itemsPerPage: limitNum,
       },
     };
+  }
+
+  async saveFilter(userId: string, name: string, criteria: FilterCriteria, organizationId?: string) {
+    return SavedFilter.create({ userId, name, criteria, organizationId: organizationId || null });
+  }
+
+  async runFilter(filterId: string, userId: string) {
+    const filter = await SavedFilter.findById(filterId);
+    if (!filter) {
+      const err: any = new Error('Filter not found');
+      err.status = 404;
+      throw err;
+    }
+
+    if (filter.userId !== userId) {
+      const err: any = new Error('Access denied');
+      err.status = 403;
+      throw err;
+    }
+
+    const criteria: FilterCriteria = filter.criteria || {};
+
+    if (criteria.projectId) {
+      const membership = await ProjectMember.findOne({ projectId: criteria.projectId, userId });
+      if (!membership) {
+        const err: any = new Error('Access denied: not a project member');
+        err.status = 403;
+        throw err;
+      }
+    }
+
+    return this.searchIssues(criteria);
+  }
+
+  async listFilters(userId: string, organizationId?: string) {
+    return SavedFilter.findByUser(userId, organizationId);
+  }
+
+  async deleteFilter(filterId: string, userId: string) {
+    const filter = await SavedFilter.findById(filterId);
+    if (!filter) {
+      const err: any = new Error('Filter not found');
+      err.status = 404;
+      throw err;
+    }
+
+    if (filter.userId !== userId) {
+      const err: any = new Error('Access denied');
+      err.status = 403;
+      throw err;
+    }
+
+    return SavedFilter.delete(filterId);
   }
 
   async getSearchSuggestions(options: any = {}) {

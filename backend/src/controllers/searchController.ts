@@ -237,6 +237,17 @@ class SearchController {
         sprintId,
         label,
         componentId,
+        bugSeverity,
+        versionId,
+        epicId,
+        storyPointsMin,
+        storyPointsMax,
+        createdAtFrom,
+        createdAtTo,
+        updatedAtFrom,
+        updatedAtTo,
+        dueDateFrom,
+        dueDateTo,
       } = req.query;
 
       const result = await searchService.searchIssues({
@@ -251,6 +262,17 @@ class SearchController {
         sprintId,
         label,
         componentId,
+        bugSeverity,
+        versionId,
+        epicId,
+        storyPointsMin,
+        storyPointsMax,
+        createdAtFrom,
+        createdAtTo,
+        updatedAtFrom,
+        updatedAtTo,
+        dueDateFrom,
+        dueDateTo,
       });
 
       res.json({
@@ -287,6 +309,62 @@ class SearchController {
         success: false,
         message: 'Internal server error during advanced search'
       });
+    }
+  }
+
+  async saveFilter(req, res) {
+    try {
+      const { name, criteria } = req.body;
+      const userId = req.user.id;
+      const organizationId = req.user.organizationId;
+      if (!name || !criteria) {
+        return res.status(400).json({ success: false, message: 'name and criteria are required' });
+      }
+      const filter = await searchService.saveFilter(userId, name, criteria, organizationId);
+      res.status(201).json({ success: true, data: filter });
+    } catch (error) {
+      console.error('Save filter error:', error);
+      res.status(500).json({ success: false, message: 'Internal server error saving filter' });
+    }
+  }
+
+  async listFilters(req, res) {
+    try {
+      const userId = req.user.id;
+      const organizationId = req.user.organizationId;
+      const filters = await searchService.listFilters(userId, organizationId);
+      res.json({ success: true, data: filters });
+    } catch (error) {
+      console.error('List filters error:', error);
+      res.status(500).json({ success: false, message: 'Internal server error listing filters' });
+    }
+  }
+
+  async runFilter(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      const result = await searchService.runFilter(id, userId);
+      res.json({ success: true, data: result });
+    } catch (error: any) {
+      if (error.status === 403) return res.status(403).json({ success: false, message: error.message });
+      if (error.status === 404) return res.status(404).json({ success: false, message: error.message });
+      console.error('Run filter error:', error);
+      res.status(500).json({ success: false, message: 'Internal server error running filter' });
+    }
+  }
+
+  async deleteFilter(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      await searchService.deleteFilter(id, userId);
+      res.status(204).send();
+    } catch (error: any) {
+      if (error.status === 403) return res.status(403).json({ success: false, message: error.message });
+      if (error.status === 404) return res.status(404).json({ success: false, message: error.message });
+      console.error('Delete filter error:', error);
+      res.status(500).json({ success: false, message: 'Internal server error deleting filter' });
     }
   }
 }
