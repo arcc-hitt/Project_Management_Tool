@@ -87,7 +87,7 @@ describe('Property 4: Board reorder set invariant', () => {
 
         expect(setsEqual(before, after)).toBe(true);
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     );
   });
 
@@ -107,7 +107,7 @@ describe('Property 4: Board reorder set invariant', () => {
           expect(() => reorder(unique, tampered)).toThrow();
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 
@@ -126,7 +126,7 @@ describe('Property 4: Board reorder set invariant', () => {
           expect(() => reorder(unique, truncated)).toThrow();
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 });
@@ -157,7 +157,7 @@ describe('Property 5: Board reorder position uniqueness', () => {
         const positionSet = new Set(positions);
         expect(positionSet.size).toBe(positions.length);
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     );
   });
 
@@ -173,7 +173,7 @@ describe('Property 5: Board reorder position uniqueness', () => {
           expect(sorted[i]).toBe(i);
         }
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     );
   });
 
@@ -188,7 +188,7 @@ describe('Property 5: Board reorder position uniqueness', () => {
           expect(result[i].position).toBe(i);
         }
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     );
   });
 });

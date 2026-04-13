@@ -9,6 +9,9 @@ import { jest } from '@jest/globals';
 import database from '../src/config/database.ts';
 import { runMigrations } from '../src/scripts/migrate.ts';
 
+// Increase default timeout for all tests to handle DB reconnection
+jest.setTimeout(30000);
+
 // Global test setup
 beforeAll(async () => {
   // Ensure test database exists by running base migrations against the configured DB
@@ -18,7 +21,7 @@ beforeAll(async () => {
     // If DB already exists, proceed
     // Any real errors will surface when running tests
   }
-});
+}, 30000);
 
 afterAll(async () => {
   // Close database connections

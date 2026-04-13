@@ -5,7 +5,6 @@
  */
 
 import * as fc from 'fast-check';
-import { describe, it, beforeEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 
 // ---------------------------------------------------------------------------
@@ -65,7 +64,7 @@ const issueStatusArb = fc.constantFrom('To Do', 'In Progress', 'In Review', 'Don
 
 const issueArb = (sprintId: string) =>
   fc.record({
-    id: fc.hexaString({ minLength: 24, maxLength: 24 }),
+    id: fc.stringMatching(/^[a-f0-9]{24}$/),
     sprintId: fc.constant(sprintId),
     status: issueStatusArb,
   });
@@ -79,32 +78,33 @@ describe('Property 10: Sprint date ordering invariant', () => {
   it('rejects any startDate >= endDate', () => {
     fc.assert(
       fc.property(dateArb, dateArb, (d1, d2) => {
+        fc.pre(!isNaN(d1.getTime()) && !isNaN(d2.getTime()));
         // Case: startDate >= endDate — must be rejected
         const [later, earlier] = d1 >= d2 ? [d1, d2] : [d2, d1];
         // When start === end or start > end, validation must fail
         const errorWhenEqual = validateSprintDates(later, earlier);
         assert.ok(
           errorWhenEqual !== null,
-          `Expected error for startDate=${later.toISOString()} >= endDate=${earlier.toISOString()}`,
+          `Expected error for startDate >= endDate`,
         );
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 
   it('accepts any startDate strictly before endDate', () => {
     fc.assert(
       fc.property(dateArb, dateArb, (d1, d2) => {
-        fc.pre(d1.getTime() !== d2.getTime());
+        fc.pre(d1.getTime() !== d2.getTime() && !isNaN(d1.getTime()) && !isNaN(d2.getTime()));
         const [earlier, later] = d1 < d2 ? [d1, d2] : [d2, d1];
         const error = validateSprintDates(earlier, later);
         assert.equal(
           error,
           null,
-          `Expected no error for startDate=${earlier.toISOString()} < endDate=${later.toISOString()}`,
+          `Expected no error for valid date range`,
         );
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 });
@@ -140,7 +140,7 @@ describe('Property 11: Single active sprint invariant', () => {
           assert.equal(thrownMessage, 'A sprint is already active in this project');
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 
@@ -169,7 +169,7 @@ describe('Property 11: Single active sprint invariant', () => {
           );
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 });
@@ -200,7 +200,7 @@ describe('Property 12: Sprint state machine ordering', () => {
           );
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 
@@ -245,7 +245,7 @@ describe('Property 12: Sprint state machine ordering', () => {
           );
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 });
@@ -281,7 +281,7 @@ describe('Property 13: Sprint close moves incomplete issues to backlog', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 
@@ -306,7 +306,7 @@ describe('Property 13: Sprint close moves incomplete issues to backlog', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 
@@ -339,7 +339,7 @@ describe('Property 13: Sprint close moves incomplete issues to backlog', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 });

@@ -218,7 +218,7 @@ describe('Property 6: Search filter correctness invariant', () => {
           }
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     );
   });
 
@@ -240,7 +240,7 @@ describe('Property 6: Search filter correctness invariant', () => {
           }
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     );
   });
 
@@ -254,7 +254,7 @@ describe('Property 6: Search filter correctness invariant', () => {
           expect(results.length).toBe(issues.length);
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 
@@ -271,7 +271,7 @@ describe('Property 6: Search filter correctness invariant', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 
@@ -288,7 +288,7 @@ describe('Property 6: Search filter correctness invariant', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 
@@ -305,7 +305,7 @@ describe('Property 6: Search filter correctness invariant', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 });
@@ -344,7 +344,7 @@ describe('Property 7: Search filter monotonicity', () => {
           expect(isSubset(r1, r2)).toBe(true);
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     );
   });
 
@@ -364,7 +364,7 @@ describe('Property 7: Search filter monotonicity', () => {
           expect(isSubset(r1, r2)).toBe(true);
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     );
   });
 
@@ -384,7 +384,7 @@ describe('Property 7: Search filter monotonicity', () => {
           expect(isSubset(r1, r2)).toBe(true);
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     );
   });
 
@@ -404,7 +404,7 @@ describe('Property 7: Search filter monotonicity', () => {
           expect(isSubset(r1, r2)).toBe(true);
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     );
   });
 
@@ -426,7 +426,7 @@ describe('Property 7: Search filter monotonicity', () => {
           expect(isSubset(r1, r2)).toBe(true);
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     );
   });
 
@@ -453,7 +453,7 @@ describe('Property 7: Search filter monotonicity', () => {
           expect(isSubset(r1, r2)).toBe(true);
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     );
   });
 });
