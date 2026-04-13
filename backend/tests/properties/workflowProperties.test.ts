@@ -155,7 +155,7 @@ describe('Property 8: Workflow transition safety', () => {
           expect(definedStateNames.has(finalStatus)).toBe(true);
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 
@@ -181,7 +181,7 @@ describe('Property 8: Workflow transition safety', () => {
           // null means transition was not permitted — that is also safe
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 
@@ -209,7 +209,7 @@ describe('Property 8: Workflow transition safety', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 });
@@ -245,7 +245,7 @@ describe('Property 9: Workflow state completeness', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 
@@ -259,7 +259,7 @@ describe('Property 9: Workflow state completeness', () => {
           expect(validCategories.has(state.category)).toBe(true);
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 

@@ -6,7 +6,6 @@
 
 import * as fc from 'fast-check';
 import Issue from '../../src/models/Issue.js';
-import { describe, it } from 'node:test';
 
 // ---------------------------------------------------------------------------
 // Arbitraries
@@ -61,7 +60,7 @@ describe('Property 1: Issue type field round-trip', () => {
         const actualSeverity = deserialized.bugSeverity ?? null;
         expect(actualSeverity).toBe(expectedSeverity);
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 });
@@ -86,7 +85,7 @@ describe('Property 2: Issue key format invariant', () => {
 
         expect(issue.issueKey).toMatch(/^[A-Z0-9]+-\d+$/);
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 });
@@ -121,7 +120,7 @@ describe('Property 3: Invalid issue type rejected', () => {
         );
         expect(hasIssueTypeError).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 });

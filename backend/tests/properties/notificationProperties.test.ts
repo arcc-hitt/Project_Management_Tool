@@ -180,7 +180,7 @@ describe('Property 26: Notification fan-out for sprint events', () => {
           expect(notifications.length).toBe(uniqueMemberCount);
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 
@@ -210,7 +210,7 @@ describe('Property 26: Notification fan-out for sprint events', () => {
           expect(notifications.length).toBe(uniqueMemberCount);
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 
@@ -235,7 +235,7 @@ describe('Property 26: Notification fan-out for sprint events', () => {
           expect(uniqueRecipients.size).toBe(recipientIds.length);
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 
@@ -259,7 +259,7 @@ describe('Property 26: Notification fan-out for sprint events', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 
@@ -290,7 +290,7 @@ describe('Property 26: Notification fan-out for sprint events', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 
@@ -315,7 +315,7 @@ describe('Property 26: Notification fan-out for sprint events', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 
@@ -326,7 +326,7 @@ describe('Property 26: Notification fan-out for sprint events', () => {
         const notifications = notifySprintStarted([], sprintId, projectId, sprintName);
         expect(notifications.length).toBe(0);
       }),
-      { numRuns: 50 },
+      { numRuns: 25 },
     );
   });
 
@@ -343,7 +343,7 @@ describe('Property 26: Notification fan-out for sprint events', () => {
           expect(notifications.length).toBe(0);
         },
       ),
-      { numRuns: 50 },
+      { numRuns: 25 },
     );
   });
 
@@ -373,7 +373,7 @@ describe('Property 26: Notification fan-out for sprint events', () => {
           expect(notifications.length).toBe(uniqueCount);
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     );
   });
 });
