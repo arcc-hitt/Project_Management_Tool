@@ -11,6 +11,7 @@ import ActivityLog from './ActivityLog.js';
 import TimeEntry from './TimeEntry.js';
 import ProjectMember from './ProjectMember.js';
 import SavedFilter from './SavedFilter.js';
+import Attachment from './Attachment.js';
 
 // Task is an alias for Issue for backward compatibility
 const Task = Issue;
@@ -26,7 +27,8 @@ export {
   ActivityLog,
   TimeEntry,
   ProjectMember,
-  SavedFilter
+  SavedFilter,
+  Attachment
 };
 
 export default {
@@ -40,5 +42,6 @@ export default {
   ActivityLog,
   TimeEntry,
   ProjectMember,
-  SavedFilter
+  SavedFilter,
+  Attachment
 };

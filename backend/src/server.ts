@@ -27,6 +27,7 @@ import issueRoutes from './routes/issueRoutes.js';
 import boardRoutes from './routes/boardRoutes.js';
 import sprintRoutes from './routes/sprintRoutes.js';
 import filterRoutes from './routes/filterRoutes.js';
+import attachmentRoutes from './routes/attachmentRoutes.js';
 // import aiRoutes from './routes/ai.js';
 
 const app = express();
@@ -101,6 +102,7 @@ app.use('/api/issues', issueRoutes);
 app.use('/api', boardRoutes);
 app.use('/api', sprintRoutes);
 app.use('/api/filters', filterRoutes);
+app.use('/api', attachmentRoutes);
 // app.use('/api/ai', aiRoutes);
 
 // Default route
