@@ -18,6 +18,10 @@ import TimeTrackingPage from './pages/TimeTrackingPage';
 import ActivityPage from './pages/ActivityPage';
 import NotificationsPage from './pages/NotificationsPage';
 import SettingsPage from './pages/SettingsPage';
+import BoardPage from './pages/BoardPage';
+import BacklogPage from './pages/BacklogPage';
+import SprintsPage from './pages/SprintsPage';
+import IssueDetailPage from './pages/IssueDetailPage';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -69,6 +73,10 @@ function App() {
                 <Route path="activity" element={<ActivityPage />} />
                 <Route path="notifications" element={<NotificationsPage />} />
                 <Route path="settings" element={<SettingsPage />} />
+                <Route path="projects/:id/board" element={<BoardPage />} />
+                <Route path="projects/:id/backlog" element={<BacklogPage />} />
+                <Route path="projects/:id/sprints" element={<SprintsPage />} />
+                <Route path="issues/:id" element={<IssueDetailPage />} />
               </Route>
 
               {/* Catch all route */}
