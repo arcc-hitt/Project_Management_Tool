@@ -2,6 +2,8 @@ import crypto from 'crypto';
 import Webhook from '../models/Webhook.js';
 import WebhookDelivery from '../models/WebhookDelivery.js';
 import ProjectMember from '../models/ProjectMember.js';
+import auditLogService from './auditLogService.js';
+import AuditLog from '../models/AuditLog.js';
 
 export const SUPPORTED_EVENTS = [
   'issue.created',
@@ -72,7 +74,7 @@ const webhookService = {
    * Register a new webhook. Validates HTTPS URL and that events are supported.
    * Req 10.1, 10.6
    */
-  async registerWebhook(data: any, userId: string): Promise<Webhook> {
+  async registerWebhook(data: any, userId: string, req?: any): Promise<Webhook> {
     if (!isValidHttpsUrl(data.url)) {
       throw createError('Webhook URL must be a valid HTTPS URL', 400);
     }
@@ -88,7 +90,7 @@ const webhookService = {
       throw createError(`Unsupported events: ${invalidEvents.join(', ')}`, 400);
     }
 
-    return Webhook.create({
+    const webhook = await Webhook.create({
       organizationId: data.organizationId || null,
       projectId: data.projectId,
       url: data.url,
@@ -96,6 +98,19 @@ const webhookService = {
       secret: data.secret || null,
       createdBy: userId,
     });
+
+    // Audit log: webhook registered (Req 11.1)
+    auditLogService.log(
+      userId,
+      AuditLog.ACTIONS.WEBHOOK_REGISTERED,
+      AuditLog.ENTITY_TYPES.WEBHOOK,
+      webhook.id,
+      null,
+      { url: data.url, events: data.events, projectId: data.projectId },
+      req
+    ).catch((err) => console.error('auditLog error (webhook.registered):', err));
+
+    return webhook;
   },
 
   /**
@@ -203,7 +218,7 @@ const webhookService = {
   /**
    * Delete a webhook. Req 10.6
    */
-  async deleteWebhook(webhookId: string, userId: string): Promise<void> {
+  async deleteWebhook(webhookId: string, userId: string, req?: any): Promise<void> {
     const webhook = await Webhook.findById(webhookId);
     if (!webhook) {
       throw createError('Webhook not found', 404);
@@ -216,6 +231,17 @@ const webhookService = {
     }
 
     await Webhook.delete(webhookId);
+
+    // Audit log: webhook deleted (Req 11.1)
+    auditLogService.log(
+      userId,
+      AuditLog.ACTIONS.WEBHOOK_DELETED,
+      AuditLog.ENTITY_TYPES.WEBHOOK,
+      webhookId,
+      { url: webhook.url, events: webhook.events, projectId: webhook.projectId },
+      null,
+      req
+    ).catch((err) => console.error('auditLog error (webhook.deleted):', err));
   },
 };
 

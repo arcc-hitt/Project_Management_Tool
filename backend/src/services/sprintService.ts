@@ -3,6 +3,8 @@ import Issue from '../models/Issue.js';
 import Project from '../models/Project.js';
 import { notifyProjectMembers, notifySprintStarted, notifySprintClosed } from '../utils/notificationUtils.js';
 import webhookService from './webhookService.js';
+import auditLogService from './auditLogService.js';
+import AuditLog from '../models/AuditLog.js';
 
 const createError = (message: string, statusCode: number) => {
   const err: any = new Error(message);
@@ -47,7 +49,7 @@ class SprintService {
    * Start a sprint. Enforces single-active-sprint invariant (409 if one already active).
    * Sets startDate to now if not already set. Emits sprint_started notifications.
    */
-  async startSprint(sprintId: string, userId: string): Promise<Sprint> {
+  async startSprint(sprintId: string, userId: string, req?: any): Promise<Sprint> {
     const sprint = await Sprint.findById(sprintId);
     if (!sprint) {
       throw createError('Sprint not found', 404);
@@ -82,6 +84,17 @@ class SprintService {
       console.error('webhook dispatch (sprint.started) error:', err);
     });
 
+    // Audit log: sprint started (Req 11.1)
+    auditLogService.log(
+      userId,
+      AuditLog.ACTIONS.SPRINT_STARTED,
+      AuditLog.ENTITY_TYPES.SPRINT,
+      sprintId,
+      { state: 'created' },
+      { state: 'active' },
+      req
+    ).catch((err) => console.error('auditLog error (sprint.started):', err));
+
     return updated;
   }
 
@@ -89,7 +102,7 @@ class SprintService {
    * Close a sprint. Sets endDate if unset. Moves incomplete issues to backlog.
    * Records completedStoryPoints and completedIssueCount.
    */
-  async closeSprint(sprintId: string, userId: string): Promise<Sprint> {
+  async closeSprint(sprintId: string, userId: string, req?: any): Promise<Sprint> {
     const sprint = await Sprint.findById(sprintId);
     if (!sprint) {
       throw createError('Sprint not found', 404);
@@ -155,6 +168,17 @@ class SprintService {
     webhookService.dispatchEvent('sprint.closed', sprint.projectId, { sprint: updated }).catch((err) => {
       console.error('webhook dispatch (sprint.closed) error:', err);
     });
+
+    // Audit log: sprint closed (Req 11.1)
+    auditLogService.log(
+      userId,
+      AuditLog.ACTIONS.SPRINT_CLOSED,
+      AuditLog.ENTITY_TYPES.SPRINT,
+      sprintId,
+      { state: 'active' },
+      { state: 'closed', completedStoryPoints, completedIssueCount },
+      req
+    ).catch((err) => console.error('auditLog error (sprint.closed):', err));
 
     return updated;
   }
