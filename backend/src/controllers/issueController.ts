@@ -1,6 +1,7 @@
 import Issue from '../models/Issue.js';
 import Project from '../models/Project.js';
 import boardService from '../services/boardService.js';
+import webhookService from '../services/webhookService.js';
 import { formatApiResponse, formatErrorResponse, getPaginationData } from '../utils/helpers.js';
 import { notifyIssueAssigned } from '../utils/notificationUtils.js';
 
@@ -57,6 +58,10 @@ class IssueController {
           console.error('notifyIssueAssigned (create) error:', err);
         });
       }
+      // Dispatch webhook event (Req 10.2)
+      webhookService.dispatchEvent('issue.created', issue.projectId, { issue }).catch((err) => {
+        console.error('webhook dispatch (issue.created) error:', err);
+      });
       return res.status(201).json(formatApiResponse(issue, 'Issue created successfully'));
     } catch (error) {
       console.error('createIssue error:', error);
@@ -104,6 +109,11 @@ class IssueController {
         });
       }
 
+      // Dispatch webhook event (Req 10.2)
+      webhookService.dispatchEvent('issue.updated', issue.projectId, { issue }).catch((err) => {
+        console.error('webhook dispatch (issue.updated) error:', err);
+      });
+
       return res.status(200).json(formatApiResponse(issue, 'Issue updated successfully'));
     } catch (error) {
       console.error('updateIssue error:', error);
@@ -113,9 +123,16 @@ class IssueController {
 
   async deleteIssue(req, res) {
     try {
+      const existing = await Issue.findById(req.params.id);
       const deleted = await Issue.delete(req.params.id);
       if (!deleted) {
         return res.status(404).json(formatErrorResponse('Issue not found'));
+      }
+      // Dispatch webhook event (Req 10.2)
+      if (existing) {
+        webhookService.dispatchEvent('issue.deleted', existing.projectId, { issueId: req.params.id }).catch((err) => {
+          console.error('webhook dispatch (issue.deleted) error:', err);
+        });
       }
       return res.status(200).json(formatApiResponse(null, 'Issue deleted successfully'));
     } catch (error) {
@@ -129,6 +146,10 @@ class IssueController {
       const { targetState } = req.body;
       const userId = req.user?.id;
       const issue = await boardService.transitionIssue(req.params.id, targetState, userId);
+      // Dispatch webhook event (Req 10.2)
+      webhookService.dispatchEvent('issue.transitioned', issue.projectId, { issue, targetState }).catch((err) => {
+        console.error('webhook dispatch (issue.transitioned) error:', err);
+      });
       return res.status(200).json(formatApiResponse(issue, 'Issue transitioned successfully'));
     } catch (error) {
       console.error('transitionIssue error:', error);
