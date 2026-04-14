@@ -4,6 +4,8 @@ import {
   camelToSnake,
   formatDateForDB 
 } from '../utils/helpers.js';
+import auditLogService from './auditLogService.js';
+import AuditLog from '../models/AuditLog.js';
 
 class ProjectService {
   /**
@@ -169,7 +171,7 @@ class ProjectService {
    * @param {string} userRole - Role of user making the update
    * @returns {object} Updated project data
    */
-  async updateProject(projectId, projectData, updatedBy, userRole) {
+  async updateProject(projectId, projectData, updatedBy, userRole, req?: any) {
     try {
       // Check if project exists and user has permission
       const existingProject = await this.getProjectById(projectId, updatedBy, userRole);
@@ -177,8 +179,27 @@ class ProjectService {
         throw new Error('Project not found or access denied');
       }
 
+      // Capture old values for audit log
+      const oldValues: Record<string, any> = {};
+      const newValues: Record<string, any> = {};
+      for (const key of Object.keys(projectData)) {
+        if (existingProject[key] !== undefined) oldValues[key] = existingProject[key];
+        newValues[key] = projectData[key];
+      }
+
       // Update project using model
       await Project.update(projectId, projectData);
+
+      // Audit log: project settings update (Req 11.1)
+      auditLogService.log(
+        updatedBy,
+        AuditLog.ACTIONS.PROJECT_SETTINGS_UPDATED,
+        AuditLog.ENTITY_TYPES.PROJECT,
+        projectId,
+        oldValues,
+        newValues,
+        req
+      ).catch((err) => console.error('auditLog error (project.settings_updated):', err));
 
       // Return updated project
       return await this.getProjectById(projectId, updatedBy, userRole);
@@ -227,7 +248,7 @@ class ProjectService {
    * @param {string} addedByRole - Role of user adding the member
    * @returns {object} Updated project data
    */
-  async addTeamMember(projectId, userId, role = 'developer', addedBy, addedByRole) {
+  async addTeamMember(projectId, userId, role = 'developer', addedBy, addedByRole, req?: any) {
     try {
       // Check if project exists and user has permission
       const project = await this.getProjectById(projectId, addedBy, addedByRole);
@@ -250,6 +271,17 @@ class ProjectService {
       // Add team member using model
       await Project.addMember(projectId, userId, role);
 
+      // Audit log: project member added (Req 11.1)
+      auditLogService.log(
+        addedBy,
+        AuditLog.ACTIONS.PROJECT_MEMBER_ADDED,
+        AuditLog.ENTITY_TYPES.PROJECT,
+        projectId,
+        null,
+        { userId, role },
+        req
+      ).catch((err) => console.error('auditLog error (project.member_added):', err));
+
       // Return updated project
       return await this.getProjectById(projectId, addedBy, addedByRole);
 
@@ -266,7 +298,7 @@ class ProjectService {
    * @param {string} removedByRole - Role of user removing the member
    * @returns {object} Updated project data
    */
-  async removeTeamMember(projectId, userId, removedBy, removedByRole) {
+  async removeTeamMember(projectId, userId, removedBy, removedByRole, req?: any) {
     try {
       // Check if project exists and user has permission
       const project = await this.getProjectById(projectId, removedBy, removedByRole);
@@ -284,6 +316,17 @@ class ProjectService {
       if (!removed) {
         throw new Error('User is not a member of this project');
       }
+
+      // Audit log: project member removed (Req 11.1)
+      auditLogService.log(
+        removedBy,
+        AuditLog.ACTIONS.PROJECT_MEMBER_REMOVED,
+        AuditLog.ENTITY_TYPES.PROJECT,
+        projectId,
+        { userId },
+        null,
+        req
+      ).catch((err) => console.error('auditLog error (project.member_removed):', err));
 
       // Return updated project
       return await this.getProjectById(projectId, removedBy, removedByRole);

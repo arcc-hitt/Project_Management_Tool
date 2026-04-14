@@ -8,6 +8,7 @@ import Sprint from './Sprint.js';
 import Comment from './Comment.js';
 import Notification from './Notification.js';
 import ActivityLog from './ActivityLog.js';
+import AuditLog from './AuditLog.js';
 import TimeEntry from './TimeEntry.js';
 import ProjectMember from './ProjectMember.js';
 import SavedFilter from './SavedFilter.js';
@@ -27,6 +28,7 @@ export {
   Comment,
   Notification,
   ActivityLog,
+  AuditLog,
   TimeEntry,
   ProjectMember,
   SavedFilter,
@@ -44,6 +46,7 @@ export default {
   Comment,
   Notification,
   ActivityLog,
+  AuditLog,
   TimeEntry,
   ProjectMember,
   SavedFilter,

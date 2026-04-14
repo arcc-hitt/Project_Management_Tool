@@ -1,5 +1,7 @@
 ﻿import { hashPassword } from '../middleware/auth.js';
 import User from '../models/User.js';
+import auditLogService from './auditLogService.js';
+import AuditLog from '../models/AuditLog.js';
 
 class UserService {
   async getAllUsers(options: any = {}) {
@@ -161,7 +163,7 @@ class UserService {
     return user ? user.toJSON() : null;
   }
 
-  async updateUserRole(userId, newRole, updatedBy) {
+  async updateUserRole(userId, newRole, updatedBy, req?: any) {
     const validRoles = ['admin', 'manager', 'developer'];
     if (!validRoles.includes(newRole)) {
       throw new Error('Invalid role specified');
@@ -172,7 +174,20 @@ class UserService {
       throw new Error('User not found');
     }
 
+    const oldRole = user.role;
     const updated = await User.update(userId, { role: newRole });
+
+    // Audit log: user role change (Req 11.1)
+    auditLogService.log(
+      updatedBy,
+      AuditLog.ACTIONS.USER_ROLE_CHANGED,
+      AuditLog.ENTITY_TYPES.USER,
+      userId,
+      { role: oldRole },
+      { role: newRole },
+      req
+    ).catch((err) => console.error('auditLog error (user.role_changed):', err));
+
     return updated ? updated.toJSON() : null;
   }
 }

@@ -29,6 +29,7 @@ import sprintRoutes from './routes/sprintRoutes.js';
 import filterRoutes from './routes/filterRoutes.js';
 import attachmentRoutes from './routes/attachmentRoutes.js';
 import webhookRoutes from './routes/webhookRoutes.js';
+import auditLogRoutes from './routes/auditLogRoutes.js';
 // import aiRoutes from './routes/ai.js';
 
 const app = express();
@@ -105,6 +106,7 @@ app.use('/api', sprintRoutes);
 app.use('/api/filters', filterRoutes);
 app.use('/api', attachmentRoutes);
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api/admin/audit-logs', auditLogRoutes);
 // app.use('/api/ai', aiRoutes);
 
 // Default route
