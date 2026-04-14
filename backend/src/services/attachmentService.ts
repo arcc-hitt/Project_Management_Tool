@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import Attachment from '../models/Attachment.js';
 import Issue from '../models/Issue.js';
 import ProjectMember from '../models/ProjectMember.js';
+import webhookService from './webhookService.js';
 
 const ALLOWED_MIME_TYPES = new Set([
   'application/pdf',
@@ -60,6 +61,14 @@ const attachmentService = {
       sizeBytes: file.size,
       storagePath,
     });
+
+    // Dispatch webhook event (Req 10.2)
+    const issue = await Issue.findById(issueId).catch(() => null);
+    if (issue) {
+      webhookService.dispatchEvent('attachment.uploaded', issue.projectId, { attachment, issueId }).catch((err) => {
+        console.error('webhook dispatch (attachment.uploaded) error:', err);
+      });
+    }
 
     return attachment;
   },

@@ -2,6 +2,7 @@ import Sprint from '../models/Sprint.js';
 import Issue from '../models/Issue.js';
 import Project from '../models/Project.js';
 import { notifyProjectMembers, notifySprintStarted, notifySprintClosed } from '../utils/notificationUtils.js';
+import webhookService from './webhookService.js';
 
 const createError = (message: string, statusCode: number) => {
   const err: any = new Error(message);
@@ -76,6 +77,11 @@ class SprintService {
       console.error('Failed to send sprint_started notifications:', notifErr);
     }
 
+    // Dispatch webhook event (Req 10.2)
+    webhookService.dispatchEvent('sprint.started', sprint.projectId, { sprint: updated }).catch((err) => {
+      console.error('webhook dispatch (sprint.started) error:', err);
+    });
+
     return updated;
   }
 
@@ -144,6 +150,11 @@ class SprintService {
     } catch (notifErr) {
       console.error('Failed to send sprint_closed notifications:', notifErr);
     }
+
+    // Dispatch webhook event (Req 10.2)
+    webhookService.dispatchEvent('sprint.closed', sprint.projectId, { sprint: updated }).catch((err) => {
+      console.error('webhook dispatch (sprint.closed) error:', err);
+    });
 
     return updated;
   }

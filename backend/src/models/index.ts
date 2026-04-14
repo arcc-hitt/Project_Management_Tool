@@ -12,6 +12,8 @@ import TimeEntry from './TimeEntry.js';
 import ProjectMember from './ProjectMember.js';
 import SavedFilter from './SavedFilter.js';
 import Attachment from './Attachment.js';
+import Webhook from './Webhook.js';
+import WebhookDelivery from './WebhookDelivery.js';
 
 // Task is an alias for Issue for backward compatibility
 const Task = Issue;
@@ -28,7 +30,9 @@ export {
   TimeEntry,
   ProjectMember,
   SavedFilter,
-  Attachment
+  Attachment,
+  Webhook,
+  WebhookDelivery,
 };
 
 export default {
@@ -43,5 +47,7 @@ export default {
   TimeEntry,
   ProjectMember,
   SavedFilter,
-  Attachment
+  Attachment,
+  Webhook,
+  WebhookDelivery,
 };
