@@ -24,6 +24,9 @@ import SprintsPage from './pages/SprintsPage';
 import IssueDetailPage from './pages/IssueDetailPage';
 import SSOCallbackPage from './pages/SSOCallbackPage';
 import ReportsPage from './pages/ReportsPage';
+import AdvancedSearchPage from './pages/AdvancedSearchPage';
+import AuditLogsPage from './pages/AuditLogsPage';
+import IntegrationsPage from './pages/IntegrationsPage';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -73,7 +76,13 @@ function App() {
                     <UsersPage />
                   </ProtectedRoute>
                 } />
-                <Route path="search" element={<SearchPage />} />
+                <Route path="search" element={<AdvancedSearchPage />} />
+                <Route path="admin/audit-logs" element={
+                  <ProtectedRoute requiredRoles={['admin']}>
+                    <AuditLogsPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="settings/integrations" element={<IntegrationsPage />} />
                 <Route path="time-tracking" element={<TimeTrackingPage />} />
                 <Route path="activity" element={<ActivityPage />} />
                 <Route path="notifications" element={<NotificationsPage />} />
