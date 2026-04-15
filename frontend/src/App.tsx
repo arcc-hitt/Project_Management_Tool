@@ -22,6 +22,7 @@ import BoardPage from './pages/BoardPage';
 import BacklogPage from './pages/BacklogPage';
 import SprintsPage from './pages/SprintsPage';
 import IssueDetailPage from './pages/IssueDetailPage';
+import SSOCallbackPage from './pages/SSOCallbackPage';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -52,6 +53,9 @@ function App() {
                   <RegisterPage />
                 </PublicRoute>
               } />
+
+              {/* SSO callback — public, no layout */}
+              <Route path="/auth/sso-callback" element={<SSOCallbackPage />} />
 
               {/* Protected Routes with Layout */}
               <Route path="/" element={
