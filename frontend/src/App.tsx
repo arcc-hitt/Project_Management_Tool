@@ -23,6 +23,7 @@ import BacklogPage from './pages/BacklogPage';
 import SprintsPage from './pages/SprintsPage';
 import IssueDetailPage from './pages/IssueDetailPage';
 import SSOCallbackPage from './pages/SSOCallbackPage';
+import ReportsPage from './pages/ReportsPage';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -80,6 +81,7 @@ function App() {
                 <Route path="projects/:id/board" element={<BoardPage />} />
                 <Route path="projects/:id/backlog" element={<BacklogPage />} />
                 <Route path="projects/:id/sprints" element={<SprintsPage />} />
+                <Route path="projects/:id/reports" element={<ReportsPage />} />
                 <Route path="issues/:id" element={<IssueDetailPage />} />
               </Route>
 
