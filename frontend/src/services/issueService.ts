@@ -138,3 +138,65 @@ export const sprintService = {
     if (!response.success) throw new Error(response.message || 'Failed to add issue to sprint');
   },
 };
+
+// ─── Report types ────────────────────────────────────────────────────────────
+
+export interface BurndownDataPoint {
+  date: string;
+  remainingStoryPoints: number;
+  remainingIssueCount: number;
+}
+
+export interface BurndownReport {
+  sprintId: string;
+  sprintName: string;
+  startDate: string;
+  endDate: string;
+  state: string;
+  dataPoints: BurndownDataPoint[];
+}
+
+export interface VelocityDataPoint {
+  sprintId: string;
+  sprintName: string;
+  startDate: string | null;
+  endDate: string | null;
+  completedStoryPoints: number;
+  completedIssueCount: number;
+}
+
+export interface VelocityReport {
+  projectId: string;
+  velocityData: VelocityDataPoint[];
+}
+
+export interface IssueStatsReport {
+  projectId: string;
+  total: number;
+  byIssueType: Record<string, number>;
+  byStatus: Record<string, number>;
+  byPriority: Record<string, number>;
+  byAssigneeId: Record<string, number>;
+}
+
+export const reportService = {
+  async getBurndown(projectId: string, sprintId: string): Promise<BurndownReport> {
+    const response = await apiClient.get<BurndownReport>(
+      `/projects/${projectId}/reports/burndown?sprintId=${sprintId}`
+    );
+    if (!response.success || !response.data) throw new Error(response.message || 'Failed to fetch burndown');
+    return response.data;
+  },
+
+  async getVelocity(projectId: string): Promise<VelocityReport> {
+    const response = await apiClient.get<VelocityReport>(`/projects/${projectId}/reports/velocity`);
+    if (!response.success || !response.data) throw new Error(response.message || 'Failed to fetch velocity');
+    return response.data;
+  },
+
+  async getIssueStats(projectId: string): Promise<IssueStatsReport> {
+    const response = await apiClient.get<IssueStatsReport>(`/projects/${projectId}/reports/issue-stats`);
+    if (!response.success || !response.data) throw new Error(response.message || 'Failed to fetch issue stats');
+    return response.data;
+  },
+};

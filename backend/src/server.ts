@@ -31,6 +31,7 @@ import attachmentRoutes from './routes/attachmentRoutes.js';
 import webhookRoutes from './routes/webhookRoutes.js';
 import auditLogRoutes from './routes/auditLogRoutes.js';
 import ssoRoutes from './routes/ssoRoutes.js';
+import reportRoutes from './routes/reportRoutes.js';
 import passportInit from './config/passport.js';
 // import aiRoutes from './routes/ai.js';
 
@@ -111,6 +112,7 @@ app.use('/api', attachmentRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/admin/audit-logs', auditLogRoutes);
 app.use('/api/auth', ssoRoutes);
+app.use('/api', reportRoutes);
 // app.use('/api/ai', aiRoutes);
 
 // Default route

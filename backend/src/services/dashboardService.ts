@@ -1,5 +1,8 @@
 import { Project, Task, User, Comment, Notification, TimeEntry, ActivityLog } from '../models/index.js';
 import { snakeToCamel, formatDateForDB } from '../utils/helpers.js';
+import Issue from '../models/Issue.js';
+import Sprint from '../models/Sprint.js';
+import database from '../config/database.js';
 
 class DashboardService {
   /**
@@ -1089,6 +1092,171 @@ class DashboardService {
 
   async getProjectMilestones(projectId: string) {
     return [];
+  }
+
+  // ─── Sprint Reports (Requirements 14.1–14.5) ───────────────────────────────
+
+  /**
+   * Compute daily burndown data for a sprint.
+   * Returns an array of { date, remainingStoryPoints, remainingIssueCount } objects,
+   * one per calendar day from sprint start to sprint end (or today if still active).
+   * All story-point values are 0 (never null) when no story points are assigned.
+   */
+  async getBurndown(projectId: string, sprintId: string): Promise<any> {
+    const sprint = await Sprint.findById(sprintId);
+    if (!sprint) {
+      const err: any = new Error('Sprint not found');
+      err.statusCode = 404;
+      throw err;
+    }
+    if (sprint.projectId !== projectId) {
+      const err: any = new Error('Sprint does not belong to this project');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const startDate = sprint.startDate ? new Date(sprint.startDate) : new Date(sprint.createdAt);
+    const endDate = sprint.endDate ? new Date(sprint.endDate) : new Date();
+    const today = new Date();
+    const chartEnd = sprint.state === 'closed' ? endDate : (endDate < today ? endDate : today);
+
+    // Fetch all issues that were ever in this sprint (current sprintId OR completed in it)
+    const issuesCol = await database.getCollection('issues');
+    const sprintIssues = await issuesCol.find({ sprintId }).toArray();
+
+    // Determine done-category states from project workflow
+    let doneStates: Set<string> = new Set(['done']);
+    try {
+      const project = await Project.findById(projectId);
+      if (project?.workflow?.states) {
+        const doneStateNames = project.workflow.states
+          .filter((s: any) => s.category === 'done')
+          .map((s: any) => s.name);
+        if (doneStateNames.length > 0) {
+          doneStates = new Set(doneStateNames);
+        }
+      }
+    } catch {
+      // fallback: 'done' only
+    }
+
+    // Build daily data points
+    const dataPoints: Array<{ date: string; remainingStoryPoints: number; remainingIssueCount: number }> = [];
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const totalDays = Math.max(1, Math.ceil((chartEnd.getTime() - startDate.getTime()) / msPerDay) + 1);
+
+    for (let i = 0; i < totalDays; i++) {
+      const dayEnd = new Date(startDate.getTime() + (i + 1) * msPerDay - 1);
+      const dateStr = new Date(startDate.getTime() + i * msPerDay).toISOString().slice(0, 10);
+
+      // An issue is "remaining" on this day if it was not completed by end of this day
+      const remaining = sprintIssues.filter((issue) => {
+        const isDone = doneStates.has(issue.status);
+        if (!isDone) return true; // still open
+        // completed before end of this day?
+        const completedAt = issue.completedAt ? new Date(issue.completedAt) : null;
+        return completedAt ? completedAt > dayEnd : true;
+      });
+
+      const remainingStoryPoints = remaining.reduce(
+        (sum, i) => sum + (typeof i.storyPoints === 'number' ? i.storyPoints : 0),
+        0
+      );
+
+      dataPoints.push({
+        date: dateStr,
+        remainingStoryPoints,
+        remainingIssueCount: remaining.length,
+      });
+    }
+
+    return {
+      sprintId,
+      sprintName: sprint.name,
+      startDate: startDate.toISOString().slice(0, 10),
+      endDate: endDate.toISOString().slice(0, 10),
+      state: sprint.state,
+      dataPoints,
+    };
+  }
+
+  /**
+   * Return per-sprint completed story points and issue count for the last 10 closed sprints.
+   * Story point values are always 0 (never null/undefined).
+   */
+  async getVelocity(projectId: string): Promise<any> {
+    const project = await Project.findById(projectId);
+    if (!project) {
+      const err: any = new Error('Project not found');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const allSprints = await Sprint.findByProject(projectId, { state: 'closed' });
+    // Sort by endDate descending, take last 10
+    const closed = allSprints
+      .sort((a, b) => {
+        const aEnd = a.endDate ? new Date(a.endDate).getTime() : 0;
+        const bEnd = b.endDate ? new Date(b.endDate).getTime() : 0;
+        return bEnd - aEnd;
+      })
+      .slice(0, 10)
+      .reverse(); // chronological order for chart
+
+    const velocityData = closed.map((sprint) => ({
+      sprintId: sprint.id,
+      sprintName: sprint.name,
+      startDate: sprint.startDate ? new Date(sprint.startDate).toISOString().slice(0, 10) : null,
+      endDate: sprint.endDate ? new Date(sprint.endDate).toISOString().slice(0, 10) : null,
+      completedStoryPoints: typeof sprint.completedStoryPoints === 'number' ? sprint.completedStoryPoints : 0,
+      completedIssueCount: typeof sprint.completedIssueCount === 'number' ? sprint.completedIssueCount : 0,
+    }));
+
+    return { projectId, velocityData };
+  }
+
+  /**
+   * Return issue counts grouped by issueType, status, priority, and assigneeId.
+   */
+  async getIssueStats(projectId: string): Promise<any> {
+    const project = await Project.findById(projectId);
+    if (!project) {
+      const err: any = new Error('Project not found');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const issuesCol = await database.getCollection('issues');
+    const issues = await issuesCol.find({ projectId }).toArray();
+
+    const byIssueType: Record<string, number> = {};
+    const byStatus: Record<string, number> = {};
+    const byPriority: Record<string, number> = {};
+    const byAssigneeId: Record<string, number> = {};
+
+    for (const issue of issues) {
+      const type = issue.issueType || 'task';
+      byIssueType[type] = (byIssueType[type] || 0) + 1;
+
+      const status = issue.status || 'todo';
+      byStatus[status] = (byStatus[status] || 0) + 1;
+
+      const priority = issue.priority || 'medium';
+      byPriority[priority] = (byPriority[priority] || 0) + 1;
+
+      if (issue.assignedTo) {
+        byAssigneeId[issue.assignedTo] = (byAssigneeId[issue.assignedTo] || 0) + 1;
+      }
+    }
+
+    return {
+      projectId,
+      total: issues.length,
+      byIssueType,
+      byStatus,
+      byPriority,
+      byAssigneeId,
+    };
   }
 }
 
