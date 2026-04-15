@@ -30,6 +30,8 @@ import filterRoutes from './routes/filterRoutes.js';
 import attachmentRoutes from './routes/attachmentRoutes.js';
 import webhookRoutes from './routes/webhookRoutes.js';
 import auditLogRoutes from './routes/auditLogRoutes.js';
+import ssoRoutes from './routes/ssoRoutes.js';
+import passportInit from './config/passport.js';
 // import aiRoutes from './routes/ai.js';
 
 const app = express();
@@ -76,6 +78,7 @@ app.use(morgan('combined')); // Logging
 app.use(limiter); // Rate limiting
 app.use(express.json({ limit: '10mb' })); // Body parser
 app.use(express.urlencoded({ extended: true }));
+app.use(passportInit.initialize()); // Passport (SSO strategies)
 
 // API Documentation
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
@@ -107,6 +110,7 @@ app.use('/api/filters', filterRoutes);
 app.use('/api', attachmentRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/admin/audit-logs', auditLogRoutes);
+app.use('/api/auth', ssoRoutes);
 // app.use('/api/ai', aiRoutes);
 
 // Default route
