@@ -1,17 +1,19 @@
 import rateLimit from 'express-rate-limit';
 import { config } from '../config/config.js';
 
-// General rate limiter
-export const limiter = rateLimit({
-  windowMs: config.rateLimit.windowMs,
-  max: config.rateLimit.max,
-  message: {
-    success: false,
-    message: 'Too many requests from this IP, please try again later.'
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+// General rate limiter — disabled in test environment to prevent 429s during test runs
+export const limiter = (process.env.NODE_ENV === 'test')
+  ? (req, res, next) => next()
+  : rateLimit({
+      windowMs: config.rateLimit.windowMs,
+      max: config.rateLimit.max,
+      message: {
+        success: false,
+        message: 'Too many requests from this IP, please try again later.'
+      },
+      standardHeaders: true,
+      legacyHeaders: false,
+    });
 
 // Stricter rate limiter for auth endpoints
 export const authLimiter = (process.env.NODE_ENV === 'test')

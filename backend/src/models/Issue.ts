@@ -161,6 +161,7 @@ class Issue {
       if (options.epicId) filter.epicId = options.epicId;
       if (options.componentId) filter.componentId = options.componentId;
       if (options.versionId) filter.versionId = options.versionId;
+      if (options.bugSeverity) filter.bugSeverity = options.bugSeverity;
       if (options.organizationId) filter.organizationId = options.organizationId;
       if (options.overdue) filter.dueDate = { $lt: new Date() };
       if (options.search) {
