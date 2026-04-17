@@ -352,12 +352,12 @@ const AdvancedSearchPage: React.FC = () => {
               {/* Priority */}
               <div className="space-y-1">
                 <Label className="text-xs">Priority</Label>
-                <Select value={criteria.priority ?? ''} onValueChange={(v) => set('priority', v)}>
+                <Select value={criteria.priority ?? 'all'} onValueChange={(v) => set('priority', v === 'all' ? undefined : v)}>
                   <SelectTrigger className="h-8 text-xs">
                     <SelectValue placeholder="Any priority" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Any</SelectItem>
+                    <SelectItem value="all">Any</SelectItem>
                     {PRIORITIES.map((p) => (
                       <SelectItem key={p} value={p} className="capitalize">{p}</SelectItem>
                     ))}
@@ -369,12 +369,12 @@ const AdvancedSearchPage: React.FC = () => {
               {(!criteria.issueType || criteria.issueType === 'bug') && (
                 <div className="space-y-1">
                   <Label className="text-xs">Bug Severity</Label>
-                  <Select value={criteria.bugSeverity ?? ''} onValueChange={(v) => set('bugSeverity', v)}>
+                  <Select value={criteria.bugSeverity ?? 'all'} onValueChange={(v) => set('bugSeverity', v === 'all' ? undefined : v)}>
                     <SelectTrigger className="h-8 text-xs">
                       <SelectValue placeholder="Any severity" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Any</SelectItem>
+                      <SelectItem value="all">Any</SelectItem>
                       {BUG_SEVERITIES.map((s) => (
                         <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>
                       ))}
@@ -398,12 +398,12 @@ const AdvancedSearchPage: React.FC = () => {
               {/* Project */}
               <div className="space-y-1">
                 <Label className="text-xs">Project</Label>
-                <Select value={criteria.projectId ?? ''} onValueChange={(v) => set('projectId', v)}>
+                <Select value={criteria.projectId ?? 'all'} onValueChange={(v) => set('projectId', v === 'all' ? undefined : v)}>
                   <SelectTrigger className="h-8 text-xs">
                     <SelectValue placeholder="Any project" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Any</SelectItem>
+                    <SelectItem value="all">Any</SelectItem>
                     {projects.map((p: any) => (
                       <SelectItem key={p._id ?? p.id} value={p._id ?? String(p.id)}>
                         {p.name}

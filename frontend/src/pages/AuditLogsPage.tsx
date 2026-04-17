@@ -197,12 +197,12 @@ const AuditLogsPage: React.FC = () => {
 
             <div className="space-y-1">
               <Label className="text-xs">Entity Type</Label>
-              <Select value={filters.entityType ?? ''} onValueChange={(v) => setFilter('entityType', v)}>
+              <Select value={filters.entityType ?? 'all'} onValueChange={(v) => setFilter('entityType', v === 'all' ? undefined : v)}>
                 <SelectTrigger className="h-8 text-xs">
                   <SelectValue placeholder="Any type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Any</SelectItem>
+                  <SelectItem value="all">Any</SelectItem>
                   {ENTITY_TYPES.map((t) => (
                     <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>
                   ))}
@@ -212,12 +212,12 @@ const AuditLogsPage: React.FC = () => {
 
             <div className="space-y-1">
               <Label className="text-xs">Action</Label>
-              <Select value={filters.action ?? ''} onValueChange={(v) => setFilter('action', v)}>
+              <Select value={filters.action ?? 'all'} onValueChange={(v) => setFilter('action', v === 'all' ? undefined : v)}>
                 <SelectTrigger className="h-8 text-xs">
                   <SelectValue placeholder="Any action" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Any</SelectItem>
+                  <SelectItem value="all">Any</SelectItem>
                   {ACTIONS.map((a) => (
                     <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>
                   ))}

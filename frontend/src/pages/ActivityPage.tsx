@@ -12,10 +12,12 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { activityService, type Activity as ServiceActivity } from '../services/activityService';
 import { userService } from '../services/userService';
 import { projectService } from '../services/projectService';
+import { useAuth } from '../contexts/AuthContext';
 import type { User, Project } from '../types';
 import { toast } from 'sonner';
 
 const ActivityPage: React.FC = () => {
+  const { user: currentUser } = useAuth();
   const [activities, setActivities] = useState<ServiceActivity[]>([]);
   const [allActivities, setAllActivities] = useState<ServiceActivity[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -148,8 +150,8 @@ const ActivityPage: React.FC = () => {
     });
   };
 
-  // Get current user ID (mock for now)
-  const getCurrentUserId = () => 1; // In real app, get from auth context
+  // Get current user ID from auth context
+  const getCurrentUserId = () => currentUser?.id ?? 0;
 
   // Real-time filtering effect
   useEffect(() => {
@@ -174,7 +176,7 @@ const ActivityPage: React.FC = () => {
       
       // Fetch activities, users, and projects in parallel
       const [activitiesResponse, usersResponse, projectsResponse] = await Promise.all([
-        activityService.getActivities({ limit: 200, sortBy: 'createdAt', sortOrder: 'desc' }),
+        activityService.getActivities({ limit: 100 }),
         userService.getUsers({ limit: 100 }),
         projectService.getProjects({ limit: 100 })
       ]);
