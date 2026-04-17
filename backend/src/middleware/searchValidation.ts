@@ -319,7 +319,23 @@ export const advancedSearchValidation = [
 
 // Issue search validation
 export const issueSearchValidation = [
-  ...searchQueryValidation,
+  query('query')
+    .optional()
+    .isString()
+    .trim()
+    .isLength({ min: 1, max: 500 })
+    .withMessage('Query must be between 1 and 500 characters'),
+
+  query('page')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Page must be a positive integer'),
+
+  // Note: limit > 100 is silently capped to 100 in the service layer, not rejected
+  query('limit')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Limit must be a positive integer'),
 
   query('issueType')
     .optional()
@@ -328,8 +344,8 @@ export const issueSearchValidation = [
 
   query('status')
     .optional()
-    .isIn(['todo', 'in_progress', 'in_review', 'done'])
-    .withMessage('Invalid issue status'),
+    .isString()
+    .withMessage('Status must be a string'),
 
   query('priority')
     .optional()
@@ -361,6 +377,61 @@ export const issueSearchValidation = [
     .optional()
     .isString()
     .withMessage('Component ID must be a string'),
+
+  query('bugSeverity')
+    .optional()
+    .isIn(['critical', 'high', 'medium', 'low'])
+    .withMessage('Invalid bugSeverity value'),
+
+  query('versionId')
+    .optional()
+    .isString()
+    .withMessage('Version ID must be a string'),
+
+  query('epicId')
+    .optional()
+    .isString()
+    .withMessage('Epic ID must be a string'),
+
+  query('storyPointsMin')
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage('storyPointsMin must be a non-negative integer'),
+
+  query('storyPointsMax')
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage('storyPointsMax must be a non-negative integer'),
+
+  query('createdAtFrom')
+    .optional()
+    .isISO8601()
+    .withMessage('createdAtFrom must be a valid ISO 8601 date'),
+
+  query('createdAtTo')
+    .optional()
+    .isISO8601()
+    .withMessage('createdAtTo must be a valid ISO 8601 date'),
+
+  query('updatedAtFrom')
+    .optional()
+    .isISO8601()
+    .withMessage('updatedAtFrom must be a valid ISO 8601 date'),
+
+  query('updatedAtTo')
+    .optional()
+    .isISO8601()
+    .withMessage('updatedAtTo must be a valid ISO 8601 date'),
+
+  query('dueDateFrom')
+    .optional()
+    .isISO8601()
+    .withMessage('dueDateFrom must be a valid ISO 8601 date'),
+
+  query('dueDateTo')
+    .optional()
+    .isISO8601()
+    .withMessage('dueDateTo must be a valid ISO 8601 date'),
 ];
 
 // Custom validation for date ranges
