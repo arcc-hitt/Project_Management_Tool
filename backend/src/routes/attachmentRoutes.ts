@@ -1,6 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import attachmentService from '../services/attachmentService.js';
+import Attachment from '../models/Attachment.js';
 import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -8,6 +9,19 @@ const router = express.Router();
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 25 * 1024 * 1024 },
+});
+
+// GET /api/issues/:id/attachments — list attachments for an issue
+router.get('/issues/:id/attachments', authenticateToken, async (req, res, next) => {
+  try {
+    const attachments = await Attachment.findByIssue(req.params.id);
+    return res.status(200).json({ success: true, data: attachments });
+  } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+    return next(error);
+  }
 });
 
 // POST /api/issues/:id/attachments — upload attachment
