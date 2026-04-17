@@ -1,5 +1,17 @@
 import { apiClient } from './api';
 
+export interface Attachment {
+  _id: string;
+  issueId: string;
+  uploadedBy: string;
+  filename: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  storagePath: string;
+  createdAt: string;
+}
+
 export interface Issue {
   _id: string;
   issueKey: string;
@@ -105,6 +117,25 @@ export const issueService = {
     const response = await apiClient.post(`/issues/${issueId}/comments`, { content });
     if (!response.success || !response.data) throw new Error(response.message || 'Failed to add comment');
     return response.data;
+  },
+
+  // ── Attachments ─────────────────────────────────────────────────────────────
+
+  async getAttachments(issueId: string): Promise<Attachment[]> {
+    const response = await apiClient.get<Attachment[]>(`/issues/${issueId}/attachments`);
+    if (!response.success || !response.data) throw new Error(response.message || 'Failed to fetch attachments');
+    return response.data;
+  },
+
+  async uploadAttachment(issueId: string, file: File): Promise<Attachment> {
+    const response = await apiClient.uploadFile<Attachment>(`/issues/${issueId}/attachments`, file);
+    if (!response.success || !response.data) throw new Error(response.message || 'Upload failed');
+    return response.data;
+  },
+
+  async deleteAttachment(issueId: string, attachmentId: string): Promise<void> {
+    const response = await apiClient.delete(`/issues/${issueId}/attachments/${attachmentId}`);
+    if (!response.success) throw new Error(response.message || 'Failed to delete attachment');
   },
 };
 
