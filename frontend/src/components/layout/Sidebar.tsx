@@ -10,7 +10,9 @@ import {
   Activity,
   Bell,
   Settings,
-  LogOut
+  LogOut,
+  Shield,
+  Plug,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../ui/button';
@@ -18,12 +20,14 @@ import { Button } from '../ui/button';
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Projects', href: '/projects', icon: FolderOpen },
-  { name: 'Tasks', href: '/tasks', icon: CheckSquare },
+  { name: 'Issues', href: '/tasks', icon: CheckSquare },
   { name: 'Users', href: '/users', icon: Users, adminOnly: true },
-  { name: 'Search', href: '/search', icon: Search },
+  { name: 'Advanced Search', href: '/search', icon: Search },
   { name: 'Time Tracking', href: '/time-tracking', icon: Clock },
   { name: 'Activity', href: '/activity', icon: Activity },
   { name: 'Notifications', href: '/notifications', icon: Bell },
+  { name: 'Integrations', href: '/settings/integrations', icon: Plug },
+  { name: 'Audit Logs', href: '/admin/audit-logs', icon: Shield, adminOnly: true },
 ];
 
 export const Sidebar: React.FC = () => {

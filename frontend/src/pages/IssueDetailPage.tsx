@@ -2,12 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Send, ArrowRight } from 'lucide-react';
+import { Send, ArrowRight, Paperclip, Trash2, Download } from 'lucide-react';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Textarea } from '../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { issueService, type Issue } from '../services/issueService';
+import { issueService, type Issue, type Attachment } from '../services/issueService';
 import { userService } from '../services/userService';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -120,16 +120,44 @@ const IssueDetailPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [commentText, setCommentText] = useState('');
 
+  const isValidId = !!id && id !== 'undefined';
+
   const { data: issue, isLoading } = useQuery({
     queryKey: ['issue', id],
     queryFn: () => issueService.getIssue(id!),
-    enabled: !!id,
+    enabled: isValidId,
   });
 
   const { data: comments = [] } = useQuery({
     queryKey: ['issue-comments', id],
     queryFn: () => issueService.getComments(id!),
-    enabled: !!id,
+    enabled: isValidId,
+  });
+
+  const { data: attachments = [] } = useQuery({
+    queryKey: ['issue-attachments', id],
+    queryFn: () => issueService.getAttachments(id!),
+    enabled: isValidId,
+  });
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const uploadMutation = useMutation({
+    mutationFn: (file: File) => issueService.uploadAttachment(id!, file),
+    onSuccess: () => {
+      toast.success('File uploaded');
+      queryClient.invalidateQueries({ queryKey: ['issue-attachments', id] });
+    },
+    onError: (err: any) => toast.error(err.message || 'Upload failed'),
+  });
+
+  const deleteAttachmentMutation = useMutation({
+    mutationFn: (attachmentId: string) => issueService.deleteAttachment(id!, attachmentId),
+    onSuccess: () => {
+      toast.success('Attachment deleted');
+      queryClient.invalidateQueries({ queryKey: ['issue-attachments', id] });
+    },
+    onError: (err: any) => toast.error(err.message || 'Delete failed'),
   });
 
   const transitionMutation = useMutation({
@@ -150,6 +178,10 @@ const IssueDetailPage: React.FC = () => {
     },
     onError: (err: any) => toast.error(err.message || 'Failed to add comment'),
   });
+
+  if (!isValidId) {
+    return <div className="text-center py-12 text-muted-foreground">Issue not found.</div>;
+  }
 
   if (isLoading) {
     return <div className="flex items-center justify-center h-64 text-muted-foreground">Loading issue...</div>;
@@ -240,6 +272,70 @@ const IssueDetailPage: React.FC = () => {
               onSubmit={() => commentMutation.mutate(commentText)}
               isSubmitting={commentMutation.isPending}
             />
+          </div>
+
+          {/* Attachments */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold">Attachments ({(attachments as Attachment[]).length})</h3>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadMutation.isPending}
+              >
+                <Paperclip className="h-3 w-3 mr-1" />
+                {uploadMutation.isPending ? 'Uploading…' : 'Attach File'}
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                onChange={e => {
+                  const file = e.target.files?.[0];
+                  if (file) uploadMutation.mutate(file);
+                  e.target.value = '';
+                }}
+              />
+            </div>
+            {(attachments as Attachment[]).length === 0 ? (
+              <p className="text-xs text-muted-foreground">No attachments yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {(attachments as Attachment[]).map((att) => (
+                  <div key={att._id} className="flex items-center gap-3 bg-gray-50 rounded-lg px-3 py-2">
+                    <Paperclip className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{att.originalName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {(att.sizeBytes / 1024).toFixed(1)} KB · {new Date(att.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <a
+                      href={`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/issues/${id}/attachments/${att._id}/download`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0"
+                    >
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Download">
+                        <Download className="h-3.5 w-3.5" />
+                      </Button>
+                    </a>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 w-7 p-0 text-destructive hover:text-destructive shrink-0"
+                      title="Delete"
+                      onClick={() => deleteAttachmentMutation.mutate(att._id)}
+                      disabled={deleteAttachmentMutation.isPending}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
